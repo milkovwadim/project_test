@@ -1,6 +1,6 @@
 # Рецептура: несмываемый спрей-молочко для волос типа ESTEL 18 PLUS
 
-Вариант для рынка ЕС (без циклопентасилоксана D5). Однородная белая эмульсия на катионных ПАВ, вязкость около 100 мПа·с, pH 5,0. Дозировки оценены по INCI оригинала и измерениям эталона (pH 5, плотность 1,01, вязкость около 100 мПа·с) и требуют лабораторной проверки.
+Версия 1.1 от 08.10.2026. Вариант для рынка ЕС: без циклопентасилоксана D5, без парабенов и формальдегид-доноров, без комплекса 18-MEA. Однородная белая эмульсия на катионных ПАВ, вязкость около 100 мПа·с, pH 4,8. Дозировки оценены по INCI оригинала и измерениям эталона (pH 5, плотность 1,01, вязкость около 100 мПа·с) и требуют лабораторной проверки.
 
 Полная версия с примерами сырья и примечаниями: `estel-18-plus-spray-formula.xlsx` (листы «Рецептура», «Технология», «ЕС и изменения»).
 
@@ -9,7 +9,7 @@
 | № | Фаза | INCI | Сырьё: пример / аналог | Активное в сырье, % | Ввод, % масс. | Активное в продукте, % | Функция |
 |---|---|---|---|---|---|---|---|
 | | **A** | **Фаза A. Водная фаза, нагрев до 75–80 °C** | | | | | |
-| 1 | A | Aqua | Вода деионизированная (проводимость <10 мкСм/см) | 100 | 79,73 | 79,73 | Растворитель, основа |
+| 1 | A | Aqua | Вода деионизированная (проводимость <10 мкСм/см) | 100 | 79,68 | 79,68 | Растворитель, основа |
 | 2 | A | Tetrasodium EDTA | Dissolvine NA-2 (Nouryon) / Trilon B Powder (BASF) | 100 | 0,10 | 0,10 | Хелатор |
 | 3 | A | Glycerin | Глицерин растительный 99,5 % | 99.5 | 1,50 | 1,49 | Увлажнитель |
 | 4 | A | Sorbitol | Neosorb 70/70 B (Roquette), раствор 70 % | 70 | 1,00 | 0,70 | Увлажнитель |
@@ -20,8 +20,8 @@
 | 9 | A | Sodium Hyaluronate | Гиалуронат натрия, ММ 1,0–1,8 МДа (Contipro / Bloomage), порошок | 100 | 0,02 | 0,02 | Увлажнение, плёнка |
 | | **B** | **Фаза B. Масляная фаза, нагрев до 75–80 °C** | | | | | |
 | 10 | B | Behentrimonium Chloride | Genamin KDMP (Clariant) / Incroquat Behenyl TMC-85 (Croda, 85 %) / Varisoft BT 85 Pellets (Evonik); гранулы ~80 % | 80 | 0,75 | 0,60 | Катионный эмульгатор, кондиционер, антистатик, термозащита |
-| 11 | B | Behentrimonium Methosulfate (and) C10-40 Isoalkylamidopropylethyldimonium Ethosulfate (and) Cetyl Alcohol | Cutissential Behenyl 18-MEA (Croda) | 100 | 1,00 | 1,00 | Кондиционер, имитатор липида кутикулы 18-MEA, соэмульгатор и структурообразователь |
-| 12 | B | Cetyl Alcohol | Lanette 16 (BASF) / Crodacol C90 (Croda) / TEGO Alkanol 16 (Evonik) | 100 | 0,20 | 0,20 | Структурообразователь, регулятор вязкости |
+| 11 | B | Behentrimonium Methosulfate (and) Cetyl Alcohol (and) Butylene Glycol | Incroquat Behenyl TMS-50 (Croda); аналоги: BTMS-50 других поставщиков с тем же INCI | 100 | 0,80 | 0,80 | Катионный эмульгатор и кондиционер, структурообразователь (замена комплекса 18-MEA) |
+| 12 | B | Cetyl Alcohol | Lanette 16 (BASF) / Crodacol C90 (Croda) / TEGO Alkanol 16 (Evonik) | 100 | 0,40 | 0,40 | Структурообразователь, регулятор вязкости |
 | 13 | B | C12-15 Alkyl Benzoate | Finsolv TN (Innospec) / Tegosoft TN (Evonik) / Crodamol AB (Croda) | 100 | 0,80 | 0,80 | Лёгкий эмолент, растворитель УФ-фильтра |
 | 14 | B | Ethylhexyl Methoxycinnamate | Uvinul MC 80 (BASF) / Parsol MCX (DSM) / Eusolex 2292 (Merck) | 100 | 0,30 | 0,30 | УФ-защита волос и цвета |
 | 15 | B | Phenyl Trimethicone | DOWSIL 556 Cosmetic Grade Fluid (Dow) / BELSIL PDM 20 (Wacker) | 100 | 0,50 | 0,50 | Блеск, гладкость, термозащита |
@@ -45,26 +45,25 @@
 | 31 | D | Carboxymethyl Chitin | Карбоксиметилхитин, раствор 1 % | 1 | 1,00 | 0,01 | Плёнкообразователь, увлажнение |
 | 32 | D | Etidronic Acid | Dequest 2010 / Turpinal SL (Italmatch), раствор 60 % | 60 | 0,05 | 0,03 | Хелатор, стабилизатор отдушки и цвета |
 | | **E** | **Фаза E. Консерванты и отдушка, ввод при температуре не выше 35 °C** | | | | | |
-| 33 | E | Phenoxyethanol | Phenoxetol (Clariant) или аналог | 100 | 0,50 | 0,50 | Консервант |
-| 34 | E | Propylene Glycol (and) Diazolidinyl Urea (and) Methylparaben (and) Propylparaben | Germaben II (Ashland) | 100 | 0,80 | 0,80 | Консервант, система оригинала |
+| 33 | E | Phenoxyethanol (and) Ethylhexylglycerin | Euxyl PE 9010 (Schülke): феноксиэтанол 90 % + этилгексилглицерин 10 % | 100 | 1,00 | 1,00 | Консервант широкого спектра с усилителем (замена феноксиэтанола 0,5 % и Germaben II 0,8 %) |
+| 34 | E | Potassium Sorbate | Сорбат калия, косметический; растворить в воде 1:5 перед вводом | 100 | 0,30 | 0,30 | Противогрибковый компонент (плесени, дрожжи) |
 | 35 | E | PEG-40 Hydrogenated Castor Oil | Kolliphor RH 40 / Eumulgin HRE 40 (BASF) / Croduret 40 (Croda) | 100 | 0,50 | 0,50 | Солюбилизатор отдушки, стабильность распыления |
 | 36 | E | Parfum | Отдушка заказчика с IFRA-сертификатом и декларацией аллергенов | 100 | 0,40 | 0,40 | Отдушка |
 | | **F** | **Фаза F. Корректировка** | | | | | |
-| 37 | F | Lactic Acid | Молочная кислота 80 % (Purac HS 80, Corbion), вводить как 20 % водный раствор | 80 | 0,15 | 0,12 | Регулятор pH |
+| 37 | F | Lactic Acid | Молочная кислота 80 % (Purac HS 80, Corbion), вводить как 20 % водный раствор | 80 | 0,20 | 0,16 | Регулятор pH |
 | | | **ИТОГО** | | | **100,00** | | |
 
 ## Примечания к позициям
 
 - **1. Aqua.** До 100 %; долить с учётом потерь на испарение
-- **2. Tetrasodium EDTA.** Растворить первым
+- **2. Tetrasodium EDTA.** Растворить первым; также защищает сорбат от окисления
 - **4. Sorbitol.** 0,7 % активного
-- **5. Propylene Glycol.** Ещё около 0,45 % приходит с Germaben II
-- **7. Niacinamide.** Стабилен при pH 5
+- **7. Niacinamide.** Стабилен при pH 4,5–5
 - **8. Caffeine.** Растворять в горячей фазе A
 - **9. Sodium Hyaluronate.** Распылить в фазу A при перемешивании до нагрева; альтернатива: 2,0 % 1 %-го раствора в фазу D. Анионный полимер: не более 0,05 %
 - **10. Behentrimonium Chloride.** 0,6 % активного. Растворитель грейда (изопропанол или этанол) указать в INCI. ЕС Annex III/287: не более 3 % в несмываемых средствах для волос
-- **11. Behentrimonium Methosulfate (and) C10-40 Isoalkylamidopropylethyldimonium Ethosulfate (and) Cetyl Alcohol.** Состав по TDS: BTMS 20–30 %, C10-40 кват 10–20 %, остальное цетиловый спирт. Замена при отсутствии: Incroquat Behenyl TMS-50 (Croda) 1,0 %
-- **12. Cetyl Alcohol.** Диапазон 0,1–0,5 %: больше спирта, выше вязкость
+- **11. Behentrimonium Methosulfate (and) Cetyl Alcohol (and) Butylene Glycol.** Ориентировочно 50 % BTMS, ~37 % цетилового спирта, ~13 % бутиленгликоля (уточнить по TDS). Даёт 0,4 % BTMS и ~0,3 % цетилового спирта. Не заменять на BTMS-25 (Varisoft BT 85, Incroquat Behenyl TMS): там цетеариловый спирт, вязкость вырастет, INCI изменится
+- **12. Cetyl Alcohol.** 0,4 % компенсирует меньшую долю жирного спирта в TMS-50 по сравнению с комплексом 18-MEA; итого жирного спирта ~0,7 %. Диапазон 0,2–0,6 %: больше спирта, выше вязкость
 - **14. Ethylhexyl Methoxycinnamate.** ЕС Annex VI/12: не более 10 %
 - **16. Dimethicone (and) Dimethiconol.** Замена XIAMETER PMX-1501 (Cyclopentasiloxane + Dimethiconol) без D5 для ЕС. Содержание диметиконола уточнить по TDS (ориентир 13–15 %)
 - **19. PEG/PPG-15/15 Dimethicone.** Замена меняет INCI на PEG/PPG-25/25 Dimethicone
@@ -78,11 +77,11 @@
 - **30. Triticum Vulgare (Wheat) Germ Extract.** Доза по сырью
 - **31. Carboxymethyl Chitin.** 0,01 % активного; анионный полимер
 - **32. Etidronic Acid.** ЕС Annex III/53: не более 1,5 % в средствах для волос
-- **33. Phenoxyethanol.** ЕС Annex V/29: не более 1,0 %
-- **34. Propylene Glycol (and) Diazolidinyl Urea (and) Methylparaben (and) Propylparaben.** В продукте: Diazolidinyl Urea 0,24 % (лимит ЕС 0,5 %), Methylparaben 0,09 % (0,4 %), Propylparaben 0,02 % (0,14 %). ЕС Регл. 2022/1181: при свободном формальдегиде более 0,001 % нужна надпись «выделяет формальдегид»
+- **33. Phenoxyethanol (and) Ethylhexylglycerin.** Даёт феноксиэтанол 0,9 % (лимит ЕС 1,0 %, Annex V/29) и этилгексилглицерин 0,1 %. Аналог в одном компоненте: Optiphen Plus (Ashland) 1,0 % при pH ниже 6, тогда отдельный сорбат не нужен
+- **34. Potassium Sorbate.** Работает в виде недиссоциированной сорбиновой кислоты, поэтому pH 4,6–5,0. ЕС Annex V/4: не более 0,6 % в пересчёте на кислоту (здесь ~0,22 %). Вводить до корректировки pH; беречь массу от света, EDTA в рецептуре защищает от окисления
 - **35. PEG-40 Hydrogenated Castor Oil.** Смешать с отдушкой до прозрачности, затем ввести в массу
 - **36. Parfum.** Аллергены в INCI по декларации поставщика. ЕС: порог 0,001 % для несмываемых; новый список аллергенов (Регл. 2023/1545) для новых продуктов с 31.07.2026
-- **37. Lactic Acid.** q.s. до pH 5,0 ± 0,2; ориентир 0,10–0,25 % по кислоте 80 %
+- **37. Lactic Acid.** q.s. до pH 4,8 ± 0,2; ориентир 0,15–0,35 % по кислоте 80 % (сорбат слегка подщелачивает)
 
 ## Порядок изготовления
 
@@ -91,19 +90,20 @@
 3. **Эмульгирование.** Ввести фазу B в фазу A при 75–80 °C под роторно-статорным гомогенизатором, 3–5 мин (лабораторно 3000–5000 об/мин). Перейти на якорную или лопастную мешалку, начать охлаждение.
 4. **Фаза C.** При температуре не выше 40 °C ввести изододекан, гомогенизация 1–2 мин, закрытая ёмкость, без открытого огня.
 5. **Фаза D.** При температуре не выше 40 °C ввести компоненты по одному, перемешивая до однородности после каждого.
-6. **Фаза E.** При температуре не выше 35 °C ввести феноксиэтанол и Germaben II, затем отдушку, заранее смешанную с PEG-40 HCO.
-7. **Фаза F.** Довести pH до 5,0 ± 0,2 молочной кислотой (20 % раствор). Долить воду до 100 % с учётом потерь. Перемешивать 10 мин, удалить воздух (вакуум или отстаивание).
+6. **Фаза E.** При температуре не выше 35 °C ввести Euxyl PE 9010, затем раствор сорбата калия (1:5 в воде из рецептурного количества), затем отдушку, заранее смешанную с PEG-40 HCO.
+7. **Фаза F.** Довести pH до 4,8 ± 0,2 молочной кислотой (20 % раствор). Долить воду до 100 % с учётом потерь. Перемешивать 10 мин, удалить воздух (вакуум или отстаивание).
 
 ## Контроль готового продукта
 
 | Показатель | Норма |
 |---|---|
 | Внешний вид | Белое однородное молочко без расслоения и комков |
-| pH (20 °C) | 5,0 ± 0,3 (эталон: 5,0) |
+| pH (20 °C) | 4,8 ± 0,2 (эталон 5,0; снижено, чтобы работал сорбат) |
 | Вязкость | 80–150 мПа·с (эталон: около 100; по методике технолога) |
 | Плотность | 1,00–1,01 г/см³ (эталон: 1,01; расчётная около 1,00) |
 | Распыление | Равномерный факел без крупных капель, помпа не забивается после 50 нажатий |
 | Стабильность | По внутренним стандартам лаборатории; ориентир: центрифуга 3000 об/мин 30 мин, 3 цикла заморозки, 45 °C 1–3 мес |
+| Микробиология | Challenge-тест по ISO 11930 обязателен для досье ЕС: новая система консервации без парабенов |
 
 ## Тонкая настройка
 
@@ -111,33 +111,37 @@
 |---|---|
 | Вязкость ниже целевой | Цетиловый спирт +0,1–0,2 % |
 | Вязкость выше целевой | Цетиловый спирт −0,1 % или Behentrimonium Chloride −0,1 % |
-| Отстой масла или сливки | Усилить гомогенизацию на стадии 3; Cutissential Behenyl 18-MEA до 1,5 % |
-| Помутнение, осадок | Проверить совместимость анионных компонентов (гиалуронат, КМ-хитин) с катионными; снизить их уровень |
+| Отстой масла или сливки | Усилить гомогенизацию на стадии 3; Incroquat Behenyl TMS-50 до 1,2 % |
+| Помутнение, осадок | Проверить совместимость анионных компонентов (гиалуронат, КМ-хитин, сорбат) с катионными; снизить их уровень |
+| Не прошёл challenge-тест по плесени | pH до 4,6; сорбат калия до 0,4 % (лимит 0,6 % как кислота) или перейти на Optiphen Plus 1,2 % |
 | Слишком тяжёлые волосы | Снизить PMX-1503 до 1,0 % и Phenyl Trimethicone до 0,3 %; изододекан оставить |
 
 ## Отличия от оригинала
 
 - **Cyclopentasiloxane (D5): исключён.** Регл. (ЕС) 2024/1328 (REACH, запись 70): D4, D5, D6 не более 0,1 % в несмываемых косметических средствах с 06.06.2027. Замена: XIAMETER PMX-1503 (диметиконол в линейном диметиконе) плюс изододекан как летучий носитель.
+- **Cutissential Behenyl 18-MEA (Behentrimonium Methosulfate + C10-40 Isoalkylamidopropylethyldimonium Ethosulfate + Cetyl Alcohol): заменён.** Incroquat Behenyl TMS-50 (Behentrimonium Methosulfate, Cetyl Alcohol, Butylene Glycol) 0,8 % плюс цетиловый спирт 0,4 %. Та же функциональная пара «бегениловый кват + цетиловый спирт», но без специального 18-MEA-квата: суммарно катионных ПАВ 1,0 % активного и жирного спирта ~0,7 %, как в версии 1.0, поэтому вязкость и кондиционирование сохраняются. Уходит только заявление о восстановлении липида 18-MEA. В INCI: минус C10-40 кват, плюс Butylene Glycol.
+- **Germaben II (Propylene Glycol, Diazolidinyl Urea, Methylparaben, Propylparaben) и Phenoxyethanol 0,5 %: заменены.** Euxyl PE 9010 (Phenoxyethanol 90 % + Ethylhexylglycerin 10 %) 1,0 % плюс Potassium Sorbate 0,3 %, pH 4,8. Причины: диазолидинилмочевина выделяет формальдегид (маркировка «выделяет формальдегид» по Регл. 2022/1181, контактный аллерген), парабены нежелательны для розницы ЕС, а феноксиэтанол уже был в составе. Новая система без парабенов, формальдегид-доноров и маркируемых аллергенов; сорбат закрывает плесени и дрожжи, слабое место феноксиэтанола. Общая нагрузка консервантов 1,3 %, как раньше.
 - **CI 60730: исключён.** Эталон белый, по решению заказчика краситель не нужен.
-- **Остальной состав: сохранён.** Все остальные INCI оригинала сохранены; порядок INCI готового продукта изменится (см. ниже).
+- **Остальной состав: сохранён.** Все остальные INCI оригинала сохранены; порядок INCI готового продукта изменится (см. раздел INCI).
 
 ## Соответствие Регламенту (ЕС) 1223/2009
 
 | Вещество | Ссылка | Лимит / требование | В рецептуре |
 |---|---|---|---|
 | Behentrimonium Chloride | Annex III/287 | Не более 3 % в несмываемых средствах для волос | 0,60 % |
+| Behentrimonium Methosulfate | Не нормируется | Ограничений в приложениях Регл. 1223/2009 нет | 0,40 % |
 | Ethylhexyl Methoxycinnamate | Annex VI/12 | Не более 10 % | 0,30 % |
-| Phenoxyethanol | Annex V/29 | Не более 1,0 % | 0,50 % |
-| Diazolidinyl Urea | Annex V/46 | Не более 0,5 % | 0,24 % |
-| Methylparaben | Annex V/12 | Не более 0,4 % (как кислота) | 0,09 % |
-| Propylparaben | Annex V/12a | Не более 0,14 % (сумма с бутилпарабеном) | 0,02 % |
+| Phenoxyethanol | Annex V/29 | Не более 1,0 % | 0,90 % (из Euxyl PE 9010) |
+| Сорбиновая кислота и её соли | Annex V/4 | Не более 0,6 % в пересчёте на кислоту | Potassium Sorbate 0,30 % ≈ 0,22 % кислоты |
+| Ethylhexylglycerin | Не нормируется | Не входит в Annex V, усилитель консервантов без ограничений | 0,10 % |
 | Etidronic Acid | Annex III/53 | Не более 1,5 % в средствах для волос | 0,03 % |
-| Формальдегид (из Diazolidinyl Urea) | Регл. 2022/1181 | Надпись «выделяет формальдегид» при содержании более 0,001 % | Проверить аналитически; при 0,24 % DU надпись, скорее всего, потребуется |
+| Парабены, Diazolidinyl Urea | Annex V/12, 12a, 46 | Разрешены с лимитами, но исключены из рецептуры | Отсутствуют |
+| Формальдегид | Регл. 2022/1181 | Надпись «выделяет формальдегид» при содержании более 0,001 % | Не требуется: формальдегид-доноров нет |
 | Аллергены отдушки | Регл. 2023/1545 | Указывать в INCI при более 0,001 % в несмываемых; новый список для новых продуктов с 31.07.2026 | По декларации поставщика отдушки |
 | D4 / D5 / D6 | Регл. 2024/1328 | Не более 0,1 % в несмываемых с 06.06.2027 | Отсутствуют; запросить у поставщиков остаточное содержание в линейных силиконах |
 
 ## Ориентировочный INCI готового продукта
 
-Aqua, Isododecane, Glycerin, Dimethicone, Sorbitol, Propylene Glycol, C12-15 Alkyl Benzoate, Cetyl Alcohol, Behentrimonium Chloride, Phenyl Trimethicone, Betaine, Sodium PCA, Panthenol, Phenoxyethanol, PEG-40 Hydrogenated Castor Oil, Acetamidoethoxyethanol, Parfum, Ethylhexyl Methoxycinnamate, PEG-12 Dimethicone, Behentrimonium Methosulfate, Diazolidinyl Urea, Silicone Quaternium-18, Argania Spinosa Kernel Oil, Dimethiconol, Niacinamide, PEG/PPG-15/15 Dimethicone, C10-40 Isoalkylamidopropylethyldimonium Ethosulfate, Hydrolyzed Keratin, Lactic Acid, Tetrasodium EDTA, Caffeine, Gossypium Herbaceum (Cotton) Seed Oil, Methylparaben, Hydrolyzed Silk, Trideceth-6, Trideceth-12, Glycine Soja Protein, Oryza Sativa Extract, Triticum Vulgare (Wheat) Germ Extract, Etidronic Acid, Propylparaben, Sodium Hyaluronate, Carboxymethyl Chitin, [аллергены отдушки по декларации]
+Aqua, Isododecane, Glycerin, Dimethicone, Phenoxyethanol, C12-15 Alkyl Benzoate, Sorbitol, Cetyl Alcohol, Behentrimonium Chloride, Propylene Glycol, Phenyl Trimethicone, Betaine, Sodium PCA, Panthenol, PEG-40 Hydrogenated Castor Oil, Acetamidoethoxyethanol, Behentrimonium Methosulfate, Parfum, Potassium Sorbate, Ethylhexyl Methoxycinnamate, PEG-12 Dimethicone, Silicone Quaternium-18, Argania Spinosa Kernel Oil, Dimethiconol, Niacinamide, PEG/PPG-15/15 Dimethicone, Lactic Acid, Hydrolyzed Keratin, Butylene Glycol, Ethylhexylglycerin, Tetrasodium EDTA, Caffeine, Gossypium Herbaceum (Cotton) Seed Oil, Hydrolyzed Silk, Trideceth-6, Trideceth-12, Glycine Soja Protein, Oryza Sativa Extract, Triticum Vulgare (Wheat) Germ Extract, Etidronic Acid, Sodium Hyaluronate, Carboxymethyl Chitin, [аллергены отдушки по декларации]
 
 Порядок INCI уточняется после получения TDS на смесевое сырьё и выбора грейда Behentrimonium Chloride (растворитель грейда добавить в INCI).
