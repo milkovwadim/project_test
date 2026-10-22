@@ -44,7 +44,7 @@ CUFF_LAYER = 5.0                        # толщина слоя трубок �
 
 def socket_params():
     """Гильза под атрофированную культю (~14 см от плато большеберцовой кости)."""
-    return gp.Params(pylon_length=235.0, socket_depth=110.0, socket_top_radius=47.0,
+    return gp.Params(pylon_length=250.0, socket_depth=86.0, socket_top_radius=44.0,
                      socket_distal_radius=38.0, socket_flat_radius=20.0,
                      socket_ml_scale=0.95, socket_ap_scale=1.06, wall=4.0, floor=12.0, skirt=12.0,
                      trim_side=10.0, trim_back=24.0, lattice_bottom_radius=25.0)
