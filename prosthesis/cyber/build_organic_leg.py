@@ -63,6 +63,19 @@ EGG_C = 64.0          # вертикальная полуось овала
 HOLE = (-45.0, 0.45, 4.5)   # маленькое круглое отверстие на овале, как на фото: угол, высота (доля), радиус
 
 
+# связки не обрываются у низа гильзы, а поднимаются по ней рельефом и тают в стенке —
+# гильза и решётка читаются одной конструкцией. Доля высоты до края гильзы, на которую
+# поднимается связка (по анатомии: икроножная — к колену сзади, передняя большеберцовая и
+# гребень большеберцовой кости — спереди, малоберцовые — сбоку)
+CLIMB = {"gm": 0.9, "gl": 0.85, "sol": 0.55, "ach": 0.35, "ta": 0.85, "edl": 0.6, "ehl": 0.5, "pl": 0.7,
+         "pb": 0.45, "tib": 0.95, "fib": 0.6}
+RIM_MARGIN = 22.0     # рельеф кончается не ближе этого к краю гильзы, мм
+K_RELIEF = 4.5        # радиус слияния рельефа со стенкой гильзы (ниже, у «яйца», — K_BODY)
+# низ гильзы («яйцо») не глухой: окна решётки заходят в него и закругляются, перемычки между
+# окнами переходят в ветви — гильза сама расходится на ветви, как на референсе
+CARVE_W = 10.0        # «ширина» оставляемой стенки вокруг ветвей у дна яйца, мм (растёт кверху)
+CARVE_TOP = 6.0       # окна кончаются не ближе этого ниже дна полости под культю, мм
+CARVE_ROUND = 4.0     # скругление краёв окон, мм
 # направление «встречной» спирали: икроножная группа в одну сторону, передняя и наружная — в другую
 SPIN = {"gm": 1, "gl": 1, "sol": 1, "ach": 1, "ta": -1, "edl": -1, "ehl": -1, "pl": -1, "pb": -1, "tib": 0, "fib": 0}
 
@@ -84,6 +97,8 @@ class Layout:
     wave: tuple = (70.0, 115.0)     # длина волны «извилин», мм
     taper: float = 0.0              # >0: внизу толще, вверху тоньше (ствол -> ветки), <0 — наоборот
     bridges: tuple = BRIDGE_LEVELS  # уровни Y-развилок между соседними связками
+    climb: float = 1.0              # насколько высоко связки поднимаются рельефом по гильзе (0 — обрываются у низа)
+    carve: float = 1.0              # окна решётки заходят в низ гильзы (0 — «яйцо» глухое)
     sculpt: float = SCULPT          # мягкость «литья»: размытие поля расстояний, мм
     k_branch: float = K_BRANCH      # радиус слияния связок между собой
 
@@ -176,7 +191,7 @@ def egg_radius(D, z):
     return np.where(z >= z_t, D.rho_out(z), r_e * np.sqrt(np.maximum(1.0 - s * s, 0.0)))
 
 
-def egg_socket_sdf(P, D, rho, f_trim, n_trim, z, Xs, Ys, holes=True):
+def egg_socket_sdf(P, D, rho, f_trim, n_trim, z, Xs, Ys, holes=True, hollow_egg=True):
     """Гильза: полость под культю, гладкий конус сверху и овальное «яйцо» снизу, как на референсе."""
     z_eq, r_eq, z_tip, z_t = egg(D)
     qx = np.maximum(rho - P.socket_flat_radius, 0.0)
@@ -186,8 +201,10 @@ def egg_socket_sdf(P, D, rho, f_trim, n_trim, z, Xs, Ys, holes=True):
     k1 = np.sqrt((rho / r_eq ** 2) ** 2 + ((z - z_eq) / EGG_C ** 2) ** 2) + 1e-9
     d_egg = k0 * (k0 - 1.0) / k1
     outer = np.minimum(np.maximum(d_os, z_t - z), d_egg)          # овал касается конуса — без шва
-    hollow = gp.round_intersect(outer + P.skirt, (z - D.z_fu + rho) / gp.SQRT2, 6.0)
-    shell = np.maximum(np.maximum(outer, -cav), -hollow)
+    shell = np.maximum(outer, -cav)
+    if hollow_egg:                                                # пустота в «яйце» (если в нём нет окон)
+        hollow = gp.round_intersect(outer + P.skirt, (z - D.z_fu + rho) / gp.SQRT2, 6.0)
+        shell = np.maximum(shell, -hollow)
     # отверстия: маленькое круглое спереди-изнутри (как на фото) и сток снизу — пустота не запечатана
     a = math.radians(HOLE[0])
     ux, uy = math.sin(a), math.cos(a)
@@ -195,11 +212,13 @@ def egg_socket_sdf(P, D, rho, f_trim, n_trim, z, Xs, Ys, holes=True):
     vu = Xs * ux + Ys * uy
     hole = np.maximum(np.sqrt((Xs - vu * ux) ** 2 + (Ys - vu * uy) ** 2 + (z - zh) ** 2) - HOLE[2], -vu)
     drain = np.maximum(np.maximum(np.hypot(Xs, Ys) - 3.5, z - (z_tip + 30.0)), (z_tip - 8.0) - z)
+    if not hollow_egg:
+        drain = np.full_like(drain, gp.BIG)                       # пустоты нет — и сток не нужен
     if holes:
         shell = np.maximum(shell, -np.minimum(hole, drain))
     trim = (z - D.z_rim - f_trim) * n_trim
     out = gp.round_intersect(shell, trim, 0.45 * P.wall)
-    return (out, np.minimum(hole, drain)) if not holes else out
+    return (out, np.minimum(hole, drain), cav) if not holes else out
 
 
 def ray_socket(P, D, c, u, z):
@@ -214,15 +233,29 @@ def ray_socket(P, D, c, u, z):
 
 
 # ----------------------------------------------------------------------
-def shape_branch(path, r0, P, D, zs, tab, z_root_end, rng=None, layout=LAYOUTS["anatomy"], fan=None, spin=1.0):
-    """Стройнее, «извилины», обжатие вокруг гильзы, «корни» в овал, схождение в горловину."""
+def shape_branch(path, r0, P, D, zs, tab, z_root_end, rng=None, layout=LAYOUTS["anatomy"], fan=None, spin=1.0,
+                 climb=0.0):
+    """Стройнее, «извилины», обжатие вокруг гильзы, «корни» в овал, схождение в горловину.
+    climb > 0: от места посадки на гильзу (z_root_end) связка поднимается по ней рельефом
+    на эту долю высоты до края и постепенно тает в стенке."""
     from scipy.ndimage import gaussian_filter1d, map_coordinates
 
     path = path[path[:, 2] <= z_root_end].copy()
     if len(path) < 4:
         return None, None
-    z = path[:, 2]
     z_tip = egg(D)[2]
+    z_top = z_root_end
+    if climb > 0 and path[-1, 2] >= z_root_end - 6.0:
+        # продолжение вверх по гильзе: в том же направлении, что и у мышцы, с затуханием
+        a, b = path[-1], path[max(len(path) - 5, 0)]
+        v = (a[:2] - b[:2]) / max(a[2] - b[2], 1e-6)
+        ph = math.atan2(a[0] - SOCKET_AXIS[0], a[1] - SOCKET_AXIS[1])
+        z_rim = D.z_rim + D.c0 + D.c1 * math.cos(ph) + D.c2 * math.cos(2 * ph)
+        z_top = z_root_end + climb * max(z_rim - RIM_MARGIN - z_root_end, 0.0)
+        ze = np.arange(a[2] + 3.0, z_top, 3.0)
+        sl = 30.0 * (1.0 - np.exp(-(ze - a[2]) / 30.0))
+        path = np.vstack([path, np.column_stack([a[0] + v[0] * sl, a[1] + v[1] * sl, ze])])
+    z = path[:, 2]
     # голень стройнее: к оси «щиколотка -> гильза»
     axis = np.outer(gp.smoothstep(40.0, z_tip, z), SOCKET_AXIS)
     path[:, :2] = axis + (path[:, :2] - axis) * SLIM
@@ -256,8 +289,16 @@ def shape_branch(path, r0, P, D, zs, tab, z_root_end, rng=None, layout=LAYOUTS["
     ro = np.maximum(map_coordinates(ROw, [fi, fj], order=1, mode="nearest"), ri + 1.0)
     s_sock = ray_socket(P, D, c, u, z)
     thick = np.clip(0.25 * (ro - ri), 1.2 * r0, 14.0)
-    root = gp.smoothstep(z_root_end - ROOT_LEN, z_root_end, z)       # 0 -> 1 к концу корня
-    t_layer = s_sock + r0 * (0.6 - 1.5 * root) + np.clip((t - ri) / (ro - ri), 0.0, 1.0) * thick * (1.0 - root)
+    root = gp.smoothstep(z_root_end - ROOT_LEN, z_root_end, z)       # 0 -> 1 к посадке на гильзу
+
+    def sink(zv):
+        """0 -> 1: связка уходит в стенку гильзы (сразу после посадки или в конце рельефа)."""
+        if z_top > z_root_end:
+            return gp.smoothstep(z_root_end + 0.25 * (z_top - z_root_end), z_top, zv)
+        return gp.smoothstep(z_root_end - ROOT_LEN, z_root_end, zv)
+
+    lift = 0.6 - 0.5 * root - 0.9 * sink(z) if z_top > z_root_end else 0.6 - 1.5 * root
+    t_layer = s_sock + r0 * lift + np.clip((t - ri) / (ro - ri), 0.0, 1.0) * thick * (1.0 - root)
     w = gp.smoothstep(z_tip - 20.0, z_tip + 25.0, z)
     t_f = t + w * (t_layer - t)
     out = path.copy()
@@ -276,7 +317,7 @@ def shape_branch(path, r0, P, D, zs, tab, z_root_end, rng=None, layout=LAYOUTS["
     out = resample(out, 4.0)
     zz = out[:, 2]
     # радиус: корень сужается и «тает» в стенке гильзы; к щиколотке ветви чуть толще
-    rad = r0 * (1.0 - 0.45 * gp.smoothstep(z_root_end - ROOT_LEN, z_root_end, zz))
+    rad = r0 * (1.0 - (0.7 if z_top > z_root_end else 0.45) * sink(zz))   # рельеф сходит на нет острым кончиком
     rad = rad * (1.0 + 0.3 * gp.smoothstep(NECK_Z[1], NECK_Z[0], zz))
     if layout.taper:
         rad = rad * (1.0 + layout.taper * (1.0 - 2.0 * gp.smoothstep(NECK_Z[0], z_tip, zz)))
@@ -440,6 +481,7 @@ def build(anatomy_dir, out_dir, seed=7, voxel=0.45, max_faces=700_000, layout="a
     t0 = time.time()
     lay = LAYOUTS[layout]
     rng = np.random.default_rng(seed)
+    lrng = np.random.default_rng(seed + 1000)      # разброс высоты рельефа — своя случайность
     P = socket_params()
     D = gp.derive(P)
     meshes = {s.key: load_atlas_mesh(anatomy_dir, s.fma) for s in MUSCLES}
@@ -471,7 +513,8 @@ def build(anatomy_dir, out_dir, seed=7, voxel=0.45, max_faces=700_000, layout="a
         spin = SPIN[spec.key] if lay.counter else 1.0
         for p, r in zip(paths, radii):
             z_end = z_tip + rng.uniform(*ROOT_RANGE)
-            q, rad = shape_branch(p, float(r), P, D, zs, tab, z_end, rng, lay, fan, spin)
+            climb = min(lay.climb * CLIMB[spec.key] * lrng.uniform(0.8, 1.15), 1.0)
+            q, rad = shape_branch(p, float(r), P, D, zs, tab, z_end, rng, lay, fan, spin, climb)
             if q is not None:
                 branches.append((q, rad, spec.key))
     branches = tie_loose_ends(branches, z_tip)
@@ -482,7 +525,8 @@ def build(anatomy_dir, out_dir, seed=7, voxel=0.45, max_faces=700_000, layout="a
         q = bone_path(b, 14.0, z_tip + 80.0)
         z_end = z_tip + (40.0 if k == "tib" else 26.0)
         r_b = BONE_R[k] * lay.thick * lay.thick_by.get(k, 1.0)
-        q, rad = shape_branch(q, r_b, P, D, zs, tab, z_end, rng, lay, fan, SPIN[k] if lay.counter else 1.0)
+        q, rad = shape_branch(q, r_b, P, D, zs, tab, z_end, rng, lay, fan, SPIN[k] if lay.counter else 1.0,
+                              min(lay.climb * CLIMB[k], 1.0))
         if q is not None:
             branches.append((q, rad, k))
     log(f"• ветвей: {len(branches)} ({time.time() - t0:.0f} с)")
@@ -510,13 +554,16 @@ def build(anatomy_dir, out_dir, seed=7, voxel=0.45, max_faces=700_000, layout="a
     n_trim = (1.0 / np.sqrt(1.0 + (fp / np.maximum(np.hypot(Xs, Ys), 20.0)) ** 2))[..., None]
     base = np.full(grid.shape, gp.BIG, np.float32)
     holes = np.full(grid.shape, gp.BIG, np.float32)
+    cavity = np.full(grid.shape, gp.BIG, np.float32)
     for k0 in range(0, grid.shape[2], 24):
         z = grid.z[k0:k0 + 24][None, None, :]
         res = np.full((grid.shape[0], grid.shape[1], z.shape[2]), gp.BIG)
         if z.max() >= z_tip - 10.0:
-            sock, hl = egg_socket_sdf(P, D, rho_e, f_trim, n_trim, z, Xs3, Ys3, holes=False)
+            sock, hl, cav = egg_socket_sdf(P, D, rho_e, f_trim, n_trim, z, Xs3, Ys3, holes=False,
+                                           hollow_egg=not lay.carve)
             res = np.minimum(res, sock)
             holes[:, :, k0:k0 + 24] = hl
+            cavity[:, :, k0:k0 + 24] = cav
         if z.min() <= STEM[2] + 12.0:
             ank = gp.ankle_sdf(P, D, rho_c, z)
             stem = gp.sd_round_cone_2d(rho_c, z - STEM[0], STEM[1], STEM[3], STEM[2] - STEM[0])
@@ -551,12 +598,29 @@ def build(anatomy_dir, out_dir, seed=7, voxel=0.45, max_faces=700_000, layout="a
             sub = local[i0:i1, j0:j1, q0:q1]
             np.minimum(sub, dd, out=sub)
         lat[sl] = gp.smin(lat[sl], local.astype(np.float32), np.float32(lay.k_branch))
+    if lay.carve:
+        # окна в «яйце»: стенка остаётся только ближе w(z) к ветвям; w растёт кверху и уходит
+        # в бесконечность к дну полости — арки окон закругляются сами, полость под культю цела.
+        # Низ гильзы при этом сплошной: снизу получается свод из ветвей, а не голая пустота
+        from scipy.ndimage import distance_transform_edt, gaussian_filter
+        z_full = D.z_d - CARVE_TOP
+        k_lo, k_hi = np.searchsorted(grid.z, z_tip - 15.0), np.searchsorted(grid.z, z_full)
+        d_lat = distance_transform_edt(lat[:, :, k_lo:k_hi] > 0).astype(np.float32) * np.float32(voxel)
+        d_lat = gaussian_filter(d_lat, 1.0 / voxel)                # расстояние до ветвей — и вдали от них
+        sv = gp.smoothstep(z_tip - 5.0, z_full, grid.z[k_lo:k_hi])
+        wz = (lay.carve * CARVE_W * sv ** 1.5 / np.maximum(1.0 - sv, 1e-3)).astype(np.float32)[None, None, :]
+        base[:, :, k_lo:k_hi] = -gp.smin(-base[:, :, k_lo:k_hi], wz - d_lat, np.float32(CARVE_ROUND))
+        del d_lat
+    # слияние с гильзой: у «яйца» мягкое (K_BODY), выше, где связки идут рельефом, — чётче
+    k_body = (K_BODY - (K_BODY - K_RELIEF) * gp.smoothstep(z_tip + 5.0, z_tip + 40.0, grid.z) * (lay.climb > 0))
+    k_body = k_body.astype(np.float32)[None, None, :]
     for k0 in range(0, grid.shape[2], 64):
-        base[:, :, k0:k0 + 64] = gp.smin(lat[:, :, k0:k0 + 64], base[:, :, k0:k0 + 64], np.float32(K_BODY))
+        base[:, :, k0:k0 + 64] = gp.smin(lat[:, :, k0:k0 + 64], base[:, :, k0:k0 + 64], k_body[:, :, k0:k0 + 64])
     del lat
     base = sculpt(base, grid, D.z_d - 6.0, lay.sculpt, log)
     base = np.maximum(base, -holes)                         # отверстия в овале — уже после доводки
-    del holes
+    base = np.maximum(base, -cavity)                        # рельеф не заходит в полость под культю
+    del holes, cavity
     sections = gp.section_profile(grid, base, P.ankle_height, D.z_d, 2.0)
     weakest = min(sections, key=lambda r: r["W_min_mm3"])
     log(f"  поле готово ({time.time() - t0:.0f} с); самое слабое сечение: z={weakest['z']} мм, "
