@@ -88,7 +88,8 @@ class Layout:
     branches: dict = field(default_factory=lambda: dict(BRANCHES))   # мышца -> (сколько связок, радиус, мм)
     thick: float = 1.0              # общий множитель толщины
     thick_by: dict = field(default_factory=dict)   # множители толщины по мышцам и костям
-    bones: bool = True              # кости-стойки (большеберцовая и малоберцовая)
+    bones: tuple = ("tib", "fib")   # кости-стойки: большеберцовая, малоберцовая
+    hover: float = 1.0              # насколько связки у гильзы отстоят от неё слоем (как мышцы над костью)
     twist: float = None             # закрутка связок одной мышцы вокруг её оси, градусы (None — анатомическая)
     cable: tuple = ()               # (радиус пучка, мм; закрутка, градусы): связки мышцы собраны в свитый «кабель»
     spiral: float = 0.0             # общий винт всех связок вокруг оси голени (от гильзы к щиколотке), градусы
@@ -98,6 +99,8 @@ class Layout:
     wave: tuple = (70.0, 115.0)     # длина волны «извилин», мм
     taper: float = 0.0              # >0: внизу толще, вверху тоньше (ствол -> ветки), <0 — наоборот
     bridges: tuple = BRIDGE_LEVELS  # уровни Y-развилок между соседними связками
+    bridge_gap: float = 36.0        # развилка соединяет связки, если между ними не больше этого, мм
+    stem_top: float = STEM[2]       # верх гладкого «стебля» над щиколоткой (у редких связок — ниже, чтобы не торчал)
     climb: float = 1.0              # насколько высоко связки поднимаются рельефом по гильзе (0 — обрываются у низа)
     carve: float = 1.0              # окна решётки заходят в низ гильзы (0 — «яйцо» глухое)
     sculpt: float = SCULPT          # мягкость «литья»: размытие поля расстояний, мм
@@ -142,21 +145,26 @@ LAYOUTS = {
     "molten": Layout("литьё: связки оплавлены и слиты, как жидкий металл", meander=6.0,
                      sculpt=2.7, k_branch=10.0),
     # --- шкала «редкие толстые -> густые тонкие» (ближе к референсу — левый край шкалы)
+    "tripod": Layout("3 мощных ствола с перемычками — ближе всего к фото",
+                     branches={"gm": (1, 9.0), "ta": (1, 9.0), "pl": (1, 7.5)}, bones=("tib",),
+                     thick_by={"tib": 0.8}, hover=0.3, meander=3.0,
+                     bridges=(0.15, 0.4, 0.65, 0.88), bridge_gap=70.0, sculpt=1.8, k_branch=8.0, stem_top=82.0),
     "thick5": Layout("5 мощных связок, огромные окна",
-                     branches={"gm": (1, 9.0), "sol": (1, 8.5), "ach": (1, 7.0), "ta": (1, 8.5), "pl": (1, 7.0)},
-                     thick_by={"tib": 1.2}, meander=3.0, bridges=(0.35, 0.7), sculpt=2.2, k_branch=9.0),
+                     branches={"gm": (1, 8.5), "sol": (1, 8.0), "ta": (1, 8.0), "pl": (1, 6.5)}, bones=("fib",),
+                     hover=0.3, meander=3.0, bridges=(0.35, 0.7), bridge_gap=55.0, sculpt=1.8, k_branch=8.0, stem_top=82.0),
     "thick7": Layout("7 толстых связок",
-                     branches={"gm": (1, 7.5), "gl": (1, 7.0), "sol": (1, 7.2), "ach": (1, 6.5), "ta": (1, 7.5),
-                               "edl": (1, 5.5), "pl": (1, 6.2)},
-                     meander=3.5, bridges=(0.25, 0.55, 0.85), sculpt=2.0, k_branch=8.0),
-    "thickfork": Layout("толстые связки с частыми Y-развилками, толще у гильзы",
-                        branches={"gm": (1, 8.0), "gl": (1, 7.0), "sol": (1, 7.5), "ta": (1, 8.0), "pl": (1, 6.5)},
-                        taper=-0.3, meander=4.0, bridges=(0.1, 0.28, 0.46, 0.64, 0.82), sculpt=2.0, k_branch=8.0),
-    "rootward": Layout("как s2, но связки мощные у гильзы и тонкие к щиколотке", thick=1.1, taper=-0.45),
-    "s2thick": Layout("как s2, но все связки на треть толще", thick=1.3, sculpt=2.0, k_branch=8.0),
+                     branches={"gm": (1, 7.2), "gl": (1, 6.6), "sol": (1, 6.8), "ach": (1, 6.0), "ta": (1, 7.2),
+                               "pl": (1, 6.0)},
+                     bones=("tib",), thick_by={"tib": 0.95}, hover=0.4, meander=3.5, bridges=(0.25, 0.55, 0.85),
+                     sculpt=1.8, k_branch=7.5, stem_top=82.0),
+    "thickfork": Layout("толстые связки с частыми Y-развилками",
+                        branches={"gm": (1, 7.5), "gl": (1, 6.5), "sol": (1, 7.0), "ta": (1, 7.5), "pl": (1, 6.0)},
+                        bones=("fib",), taper=-0.15, hover=0.4, meander=4.0, bridges=(0.1, 0.28, 0.46, 0.64, 0.82),
+                        sculpt=1.8, k_branch=7.5, stem_top=82.0),
+    "s2thick": Layout("как s2, но связки на 15 % толще", thick=1.15, hover=0.6, sculpt=1.2, k_branch=5.5),
     "sparse": Layout("средние связки, реже чем в s2",
                      branches={"gm": (1, 6.8), "gl": (1, 6.2), "sol": (2, 6.0), "ach": (1, 5.8), "ta": (1, 6.8),
-                               "pl": (1, 5.5)}),
+                               "pl": (1, 5.5)}, hover=0.6),
     "dense": Layout("густо: в полтора раза больше связок, тоньше",
                     branches={"gm": (3, 4.2), "gl": (3, 4.0), "sol": (3, 4.0), "ach": (2, 3.8), "ta": (3, 4.0),
                               "edl": (2, 3.6), "ehl": (1, 3.2), "pl": (2, 3.6), "pb": (1, 3.4)},
@@ -324,7 +332,8 @@ def shape_branch(path, r0, P, D, zs, tab, z_root_end, rng=None, layout=LAYOUTS["
     ri = map_coordinates(RIw, [fi, fj], order=1, mode="nearest")
     ro = np.maximum(map_coordinates(ROw, [fi, fj], order=1, mode="nearest"), ri + 1.0)
     s_sock = ray_socket(P, D, c, u, z)
-    thick = np.clip(0.25 * (ro - ri), 1.2 * r0, 14.0)
+    r_l = min(r0, RELIEF_R)                       # толстые связки у гильзы ложатся ближе к ней
+    thick = np.clip(0.25 * (ro - ri), 1.2 * r_l, 14.0) * layout.hover
     root = gp.smoothstep(z_root_end - ROOT_LEN, z_root_end, z)       # 0 -> 1 к посадке на гильзу
 
     def sink(zv):
@@ -334,7 +343,7 @@ def shape_branch(path, r0, P, D, zs, tab, z_root_end, rng=None, layout=LAYOUTS["
         return gp.smoothstep(z_root_end - ROOT_LEN, z_root_end, zv)
 
     lift = 0.6 - 0.5 * root - 0.9 * sink(z) if z_top > z_root_end else 0.6 - 1.5 * root
-    t_layer = s_sock + r0 * lift + np.clip((t - ri) / (ro - ri), 0.0, 1.0) * thick * (1.0 - root)
+    t_layer = s_sock + r_l * lift + np.clip((t - ri) / (ro - ri), 0.0, 1.0) * thick * (1.0 - root)
     w = gp.smoothstep(z_tip - 20.0, z_tip + 25.0, z)
     t_f = t + w * (t_layer - t)
     out = path.copy()
@@ -420,17 +429,29 @@ def tie_loose_ends(branches, z_tip):
             anchored = e[2] < NECK_Z[1] if sign < 0 else e[2] > z_tip - 5.0
             if anchored:
                 continue
-            # ближайшая точка другой ветви «по ходу» (ниже — для нижнего конца, выше — для верхнего)
-            ok = (pts[:, 2] - e[2]) * sign > 6.0
-            if not ok.any():
-                continue
-            d = np.linalg.norm(pts - e, axis=1) + np.where(ok, 0.0, 1e9)
+            # точка другой ветви «по ходу» (ниже — для нижнего конца, выше — для верхнего) на 15–60 мм
+            # дальше: конец вливается в соседа плавной диагональю (Y), а не загибается к нему вбок
+            dz = (pts[:, 2] - e[2]) * sign
+            ok = (dz > 15.0) & (dz < 60.0)
+            if ok.any():
+                d = np.hypot(pts[:, 0] - e[0], pts[:, 1] - e[1]) + 0.25 * dz + np.where(ok, 0.0, 1e9)
+            else:
+                ok = dz > 6.0
+                if not ok.any():
+                    continue
+                d = np.linalg.norm(pts - e, axis=1) + np.where(ok, 0.0, 1e9)
             k = int(np.argmin(d))
-            tgt = pts[k]
-            ctrl = e + (p[end] - p[end - 3 if end == -1 else 3]) * 0.8          # продолжение направления ветви
-            tt = np.linspace(0, 1, 12)[1:, None]
+            tgt, r_tgt = pts[k], rad[k]
+            if sign < 0 and np.hypot(*(tgt[:2] - e[:2])) > 30.0:
+                # сосед далеко — нижний конец не загибается к нему крюком, а сходится к стеблю над щиколоткой
+                tgt, r_tgt = np.array([0.0, 0.0, max(e[2] - 45.0, NECK_Z[0] + 8.0)]), r[end]
+            # кривая сначала продолжает ход ветви (на полпути до цели), потом плавно вливается
+            t_dir = p[end] - p[end - 3 if end == -1 else 3]
+            t_dir = t_dir / max(np.linalg.norm(t_dir), 1e-6)
+            ctrl = e + t_dir * 0.5 * np.linalg.norm(tgt - e)
+            tt = np.linspace(0, 1, 14)[1:, None]
             curve = (1 - tt) ** 2 * e + 2 * (1 - tt) * tt * ctrl + tt ** 2 * tgt
-            rr = np.linspace(r[end], 0.8 * min(r[end], rad[k]), len(curve))
+            rr = np.linspace(r[end], 0.8 * min(r[end], r_tgt), len(curve))
             if sign < 0:
                 segs.insert(0, curve[::-1])
                 rads.insert(0, rr[::-1])
@@ -473,7 +494,8 @@ def make_bridges(branches, D, rng, levels=BRIDGE_LEVELS, max_gap=36.0):
             if keya == keyb or gap > max_gap or gap < ra[ka] + rb[kb] + 2.0:
                 continue
             up = (li + len(out)) % 2 == 0                  # чередуем: развилка вверх / вниз
-            dz = rng.uniform(26.0, 40.0) * (1.0 if up else -1.0)
+            # между далёкими связками развилка идёт круче — диагональю, а не ступенькой
+            dz = rng.uniform(26.0, 40.0) * max(1.0, gap / 30.0) * (1.0 if up else -1.0)
             k2 = int(np.clip(np.searchsorted(pb[:, 2], pa[ka][2] + dz), 1, len(pb) - 2))
             p0, p3 = pa[ka], pb[k2]
             t0, t3 = _tangent(pa, ka) * np.sign(dz), _tangent(pb, k2) * np.sign(dz)
@@ -556,8 +578,8 @@ def build(anatomy_dir, out_dir, seed=7, voxel=0.45, max_faces=700_000, layout="a
             if q is not None:
                 branches.append((q, rad, spec.key))
     branches = tie_loose_ends(branches, z_tip)
-    branches += make_bridges(branches, D, rng, lay.bridges)
-    for k, f in BONES.items() if lay.bones else ():
+    branches += make_bridges(branches, D, rng, lay.bridges, lay.bridge_gap)
+    for k, f in ((k, BONES[k]) for k in lay.bones):
         # кости-стойки: по реальной оси кости, вверху так же вливаются в гильзу, как мышцы
         b = load_atlas_mesh(anatomy_dir, f)
         q = bone_path(b, 14.0, z_tip + 80.0)
@@ -602,9 +624,9 @@ def build(anatomy_dir, out_dir, seed=7, voxel=0.45, max_faces=700_000, layout="a
             res = np.minimum(res, sock)
             holes[:, :, k0:k0 + 24] = hl
             cavity[:, :, k0:k0 + 24] = cav
-        if z.min() <= STEM[2] + 12.0:
+        if z.min() <= lay.stem_top + 12.0:
             ank = gp.ankle_sdf(P, D, rho_c, z)
-            stem = gp.sd_round_cone_2d(rho_c, z - STEM[0], STEM[1], STEM[3], STEM[2] - STEM[0])
+            stem = gp.sd_round_cone_2d(rho_c, z - STEM[0], STEM[1], STEM[3], lay.stem_top - STEM[0])
             res = np.minimum(res, gp.smin(ank, stem, 8.0))
         base[:, :, k0:k0 + 24] = res
 
