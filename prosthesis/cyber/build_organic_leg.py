@@ -21,7 +21,7 @@ import json
 import math
 import sys
 import time
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -47,7 +47,10 @@ BRANCHES = {
 BONE_R = {"tib": 6.6, "fib": 4.3}
 ROOT_RANGE = (10.0, 34.0)   # «корни» поднимаются на столько мм выше нижней точки «яйца» гильзы
 ROOT_LEN = 40.0       # длина участка, на котором ветвь вливается в гильзу
-BRIDGE_LEVELS = (0.15, 0.35, 0.55, 0.75, 0.92)   # уровни перемычек между соседними ветвями
+BRIDGE_LEVELS = (0.18, 0.5, 0.8)   # уровни плавных развилок между соседними ветвями
+SCULPT = 1.7          # «скульптурная» доводка решётки: размытие поля расстояний, мм (щели заплывают,
+                      # бугорки сглаживаются, в стыках — галтели); гильзу не трогает
+SCULPT_GROW = 0.35    # компенсация: размытие чуть утончает ветви, возвращаем столько мм
 NECK_Z = (36.0, 88.0) # внизу ветви сходятся к оси щиколотки на этом участке
 SLIM = 0.8            # голень стройнее анатомической (как на референсе)
 MEANDER = 5.0         # амплитуда «извилин» ветвей, мм
@@ -58,6 +61,24 @@ STEM = (30.0, 21.0, 92.0, 13.0)   # гладкий «стебель» над щ�
 EGG_UP = 18.0         # овал переходит в конус гильзы (по касательной) на столько выше дна полости
 EGG_C = 64.0          # вертикальная полуось овала
 HOLE = (-45.0, 0.45, 4.5)   # маленькое круглое отверстие на овале, как на фото: угол, высота (доля), радиус
+
+
+@dataclass(frozen=True)
+class Layout:
+    """Раскладка связок: набор связок тот же, меняется только то, как они идут."""
+    title: str
+    spiral: float = 0.0             # общий винт всех связок вокруг оси голени (от гильзы к щиколотке), градусы
+    fan: float = 0.0                # 0..1: насколько развести связки по кругу равномерно (1 — ровный шаг)
+    meander: float = MEANDER
+    bridges: tuple = BRIDGE_LEVELS
+
+
+LAYOUTS = {
+    "anatomy": Layout("анатомия: связки по ходу мышц"),
+    "spiral": Layout("спираль: весь пучок винтом вокруг голени", spiral=110.0),
+    "fan": Layout("веер: связки разведены по кругу ровнее, окна между ними чище", fan=0.75),
+    "delta": Layout("дельта: извилистее и больше развилок", meander=6.5, bridges=(0.1, 0.28, 0.46, 0.64, 0.82)),
+}
 
 
 # ----------------------------------------------------------------------
@@ -108,7 +129,7 @@ def egg_radius(D, z):
     return np.where(z >= z_t, D.rho_out(z), r_e * np.sqrt(np.maximum(1.0 - s * s, 0.0)))
 
 
-def egg_socket_sdf(P, D, rho, f_trim, n_trim, z, Xs, Ys):
+def egg_socket_sdf(P, D, rho, f_trim, n_trim, z, Xs, Ys, holes=True):
     """Гильза: полость под культю, гладкий конус сверху и овальное «яйцо» снизу, как на референсе."""
     z_eq, r_eq, z_tip, z_t = egg(D)
     qx = np.maximum(rho - P.socket_flat_radius, 0.0)
@@ -127,9 +148,11 @@ def egg_socket_sdf(P, D, rho, f_trim, n_trim, z, Xs, Ys):
     vu = Xs * ux + Ys * uy
     hole = np.maximum(np.sqrt((Xs - vu * ux) ** 2 + (Ys - vu * uy) ** 2 + (z - zh) ** 2) - HOLE[2], -vu)
     drain = np.maximum(np.maximum(np.hypot(Xs, Ys) - 3.5, z - (z_tip + 30.0)), (z_tip - 8.0) - z)
-    shell = np.maximum(shell, -np.minimum(hole, drain))
+    if holes:
+        shell = np.maximum(shell, -np.minimum(hole, drain))
     trim = (z - D.z_rim - f_trim) * n_trim
-    return gp.round_intersect(shell, trim, 0.45 * P.wall)
+    out = gp.round_intersect(shell, trim, 0.45 * P.wall)
+    return (out, np.minimum(hole, drain)) if not holes else out
 
 
 def ray_socket(P, D, c, u, z):
@@ -144,7 +167,7 @@ def ray_socket(P, D, c, u, z):
 
 
 # ----------------------------------------------------------------------
-def shape_branch(path, r0, P, D, zs, tab, z_root_end, rng=None):
+def shape_branch(path, r0, P, D, zs, tab, z_root_end, rng=None, layout=LAYOUTS["anatomy"], fan=None):
     """Стройнее, «извилины», обжатие вокруг гильзы, «корни» в овал, схождение в горловину."""
     from scipy.ndimage import gaussian_filter1d, map_coordinates
 
@@ -156,6 +179,23 @@ def shape_branch(path, r0, P, D, zs, tab, z_root_end, rng=None):
     # голень стройнее: к оси «щиколотка -> гильза»
     axis = np.outer(gp.smoothstep(40.0, z_tip, z), SOCKET_AXIS)
     path[:, :2] = axis + (path[:, :2] - axis) * SLIM
+    if fan is not None and layout.fan:
+        # «веер»: на середине голени связки ровнее по кругу; у горловины и у гильзы — как в анатомии
+        phis, dphi = fan
+        d = path[:, :2] - axis
+        rr, ph = np.hypot(d[:, 0], d[:, 1]), np.arctan2(d[:, 0], d[:, 1]) % (2 * np.pi)
+        fi = np.clip(np.interp(z, zs, np.arange(len(zs))), 0, len(zs) - 1)
+        fj = ph / (2 * np.pi) * len(phis)
+        dp = map_coordinates(np.concatenate([dphi, dphi[:, :1]], 1), [fi, fj], order=1, mode="nearest")
+        w = layout.fan * gp.smoothstep(NECK_Z[0], NECK_Z[1], z) * (1.0 - gp.smoothstep(z_tip - 30.0, z_tip, z))
+        ph = ph + w * dp
+        path[:, :2] = axis + rr[:, None] * np.column_stack([np.sin(ph), np.cos(ph)])
+    if layout.spiral:
+        # винт вокруг оси голени: у гильзы связки на своих местах, к горловине повёрнуты на spiral
+        th = np.radians(layout.spiral) * (gp.smoothstep(NECK_Z[0], z_tip, z) - 1.0)
+        d = path[:, :2] - axis
+        ct, st = np.cos(th), np.sin(th)
+        path[:, :2] = axis + np.column_stack([d[:, 0] * ct - d[:, 1] * st, d[:, 0] * st + d[:, 1] * ct])
     # --- выше низа гильзы: слой поверх гильзы (как в кабельной версии), к концу — прижать к стенке
     phis, C, RI, RO = tab
     fi = np.clip(np.interp(z, zs, np.arange(len(zs))), 0, len(zs) - 1)
@@ -176,9 +216,9 @@ def shape_branch(path, r0, P, D, zs, tab, z_root_end, rng=None):
     out = path.copy()
     out[:, :2] = c + u * t_f[:, None]
     # «извилины»: волна поперёк ветви, гаснет у горловины и у корня
-    if rng is not None and MEANDER > 0:
+    if rng is not None and layout.meander > 0:
         lam, ph0 = rng.uniform(70.0, 115.0), rng.uniform(0, 2 * np.pi)
-        amp = MEANDER * gp.smoothstep(NECK_Z[0], NECK_Z[1], z) * (1.0 - gp.smoothstep(z_root_end - ROOT_LEN, z_root_end, z))
+        amp = layout.meander * gp.smoothstep(NECK_Z[0], NECK_Z[1], z) * (1.0 - gp.smoothstep(z_root_end - ROOT_LEN, z_root_end, z))
         off = amp * np.sin(2 * np.pi * z / lam + ph0)
         out[:, 0] += -u[:, 1] * off
         out[:, 1] += u[:, 0] * off
@@ -192,6 +232,35 @@ def shape_branch(path, r0, P, D, zs, tab, z_root_end, rng=None):
     rad = r0 * (1.0 - 0.45 * gp.smoothstep(z_root_end - ROOT_LEN, z_root_end, zz))
     rad = rad * (1.0 + 0.3 * gp.smoothstep(NECK_Z[1], NECK_Z[0], zz))
     return out, rad
+
+
+def fan_table(paths, z_tip, zs, n_phi=120):
+    """Таблица «веера»: на каждой высоте угловые положения связок вокруг оси голени
+    разводятся к ровному шагу (порядок связок по кругу сохраняется). Возвращает
+    (сетка углов, поправка угла [высота, угол]) — гладкую по высоте и по углу."""
+    from scipy.ndimage import gaussian_filter
+    phis = np.linspace(0, 2 * np.pi, n_phi, endpoint=False)
+    A = np.full((len(zs), len(paths)), np.nan)
+    for j, p in enumerate(paths):
+        ax = np.outer(gp.smoothstep(40.0, z_tip, p[:, 2]), SOCKET_AXIS)
+        ang = np.unwrap(np.arctan2(p[:, 0] - ax[:, 0], p[:, 1] - ax[:, 1]))
+        on = (zs >= p[0, 2]) & (zs <= p[-1, 2])
+        A[on, j] = np.interp(zs[on], p[:, 2], ang) % (2 * np.pi)
+    dphi = np.zeros((len(zs), n_phi))
+    for i in range(len(zs)):
+        a = np.sort(A[i][~np.isnan(A[i])])
+        m = len(a)
+        if m < 3:
+            continue
+        step = 2 * np.pi * np.arange(m) / m
+        t = step + np.mean(a - step)                              # ровный шаг с тем же «средним поворотом»
+        d = t - a
+        # поправка для любого угла — линейно между соседними связками, по кругу
+        x = np.r_[a[-1] - 2 * np.pi, a, a[0] + 2 * np.pi]
+        y = np.r_[d[-1], d, d[0]]
+        dphi[i] = np.interp(phis, x, y)
+    dphi = gaussian_filter(dphi, (3.0, 2.0), mode=("nearest", "wrap"))
+    return phis, dphi
 
 
 def tie_loose_ends(branches, z_tip):
@@ -226,41 +295,53 @@ def tie_loose_ends(branches, z_tip):
             else:
                 segs.append(curve)
                 rads.append(rr)
-        q = np.vstack(segs)
-        order = np.argsort(q[:, 2], kind="stable") if False else np.arange(len(q))
-        out.append((q[order], np.concatenate(rads)[order], key))
+        out.append((np.vstack(segs), np.concatenate(rads), key))
     return out
 
 
-def make_bridges(branches, D, rng, max_gap=34.0):
-    """Гладкие перемычки между соседними (по окружности) ветвями разных мышц на нескольких уровнях:
-    анатомически — межмышечные перегородки, визуально — окна, как на референсе."""
+def _tangent(path, k):
+    a, b = path[max(k - 2, 0)], path[min(k + 2, len(path) - 1)]
+    t = b - a
+    return t / max(np.linalg.norm(t), 1e-6)
+
+
+def make_bridges(branches, D, rng, levels=BRIDGE_LEVELS, max_gap=36.0):
+    """Плавные развилки между соседними ветвями разных мышц: перемычка уходит от одной ветви
+    по касательной и по касательной же вливается в соседнюю (кубическая кривая Безье) —
+    получается Y-образное ветвление, как на референсе, без узлов «под прямым углом»."""
     out = []
-    z_lo, z_hi = D.z_n1 + 12.0, egg(D)[2] + 6.0
-    for li, fr in enumerate(BRIDGE_LEVELS):
-        z = z_lo + fr * (z_hi - z_lo) + rng.uniform(-8.0, 8.0)
+    z_lo, z_hi = D.z_n1 + 18.0, egg(D)[2] - 4.0
+    for li, fr in enumerate(levels):
+        z = z_lo + fr * (z_hi - z_lo) + rng.uniform(-6.0, 6.0)
         pts = []
-        for pth, rad, key in branches:
-            if pth[0, 2] <= z <= pth[-1, 2]:
+        for bi, (pth, rad, key) in enumerate(branches):
+            if pth[0, 2] + 15 <= z <= pth[-1, 2] - 15:
                 k = int(np.searchsorted(pth[:, 2], z))
-                pts.append((pth[min(k, len(pth) - 1)], float(rad[min(k, len(rad) - 1)]), key))
+                pts.append((bi, k, key))
         if len(pts) < 3:
             continue
-        c = np.mean([p[0][:2] for p in pts], axis=0)
-        order = sorted(range(len(pts)), key=lambda i: math.atan2(pts[i][0][0] - c[0], pts[i][0][1] - c[1]))
-        for a_i, b_i in zip(order, order[1:] + order[:1]):
-            (pa, ra, ka), (pb, rb, kb) = pts[a_i], pts[b_i]
-            gap = np.linalg.norm(pa[:2] - pb[:2])
-            if ka == kb or gap > max_gap or gap < ra + rb + 1.0:
+        c = np.mean([branches[bi][0][k][:2] for bi, k, _ in pts], axis=0)
+        ang = lambda e: math.atan2(branches[e[0]][0][e[1]][0] - c[0], branches[e[0]][0][e[1]][1] - c[1])
+        pts.sort(key=ang)
+        for ia, ib in zip(pts, pts[1:] + pts[:1]):
+            (ba, ka, keya), (bb, kb, keyb) = ia, ib
+            pa, ra = branches[ba][0], branches[ba][1]
+            pb, rb = branches[bb][0], branches[bb][1]
+            gap = np.linalg.norm(pa[ka][:2] - pb[kb][:2])
+            if keya == keyb or gap > max_gap or gap < ra[ka] + rb[kb] + 2.0:
                 continue
-            dz = (1.0 if (li + a_i) % 2 else -1.0) * rng.uniform(10.0, 18.0)  # диагональ: то вверх, то вниз
-            q0, q1 = pa.copy(), pb.copy()
-            q1[2] += dz
-            mid = 0.5 * (q0 + q1)
-            mid[:2] += (mid[:2] - c) / max(np.linalg.norm(mid[:2] - c), 1e-6) * 0.5   # по поверхности голени
-            path = resample(np.vstack([q0, mid, q1]), 3.0)
-            r = 0.75 * min(ra, rb)
-            out.append((path, np.full(len(path), r), "bridge"))
+            up = (li + len(out)) % 2 == 0                  # чередуем: развилка вверх / вниз
+            dz = rng.uniform(26.0, 40.0) * (1.0 if up else -1.0)
+            k2 = int(np.clip(np.searchsorted(pb[:, 2], pa[ka][2] + dz), 1, len(pb) - 2))
+            p0, p3 = pa[ka], pb[k2]
+            t0, t3 = _tangent(pa, ka) * np.sign(dz), _tangent(pb, k2) * np.sign(dz)
+            L = np.linalg.norm(p3 - p0)
+            p1, p2 = p0 + t0 * L * 0.45, p3 - t3 * L * 0.45
+            tt = np.linspace(0, 1, max(8, int(L / 3.0)))[:, None]
+            curve = (1 - tt) ** 3 * p0 + 3 * (1 - tt) ** 2 * tt * p1 + 3 * (1 - tt) * tt ** 2 * p2 + tt ** 3 * p3
+            r_end = 0.8 * min(ra[ka], rb[k2])
+            rr = r_end * (1.0 - 0.22 * np.sin(np.pi * tt[:, 0]))      # тоньше в середине — изящнее
+            out.append((curve, rr, "bridge"))
     return out
 
 
@@ -273,43 +354,67 @@ def bone_path(mesh, z_lo, z_hi, step=8.0):
     return pts
 
 
+def sculpt(field, grid, z_keep, log=print):
+    """Скульптурная доводка решётки: размытие поля расстояний работает как сглаживающий
+    «мастихин»: узкие щели между почти касающимися ветвями заплывают, мелкие бугорки и узелки
+    сглаживаются, во внутренних углах стыков появляются ровные галтели; крупные окна остаются.
+    Тонкая стенка гильзы (выше z_keep) не трогается — размытие её бы съело."""
+    from scipy.ndimage import gaussian_filter
+    t0 = time.time()
+    k1 = int(np.searchsorted(grid.z, z_keep + 6.0))
+    sub = field[:, :, :k1]
+    blurred = gaussian_filter(sub, SCULPT / grid.v) - np.float32(SCULPT_GROW)
+    w = gp.smoothstep(z_keep, z_keep - 12.0, grid.z[:k1])[None, None, :].astype(np.float32)
+    field[:, :, :k1] = w * blurred + (1.0 - w) * sub
+    log(f"  скульптурная доводка решётки ({time.time() - t0:.0f} с)")
+    return field
+
+
 # ----------------------------------------------------------------------
-def build(anatomy_dir, out_dir, seed=7, voxel=0.6, max_faces=400_000, log=print):
+def build(anatomy_dir, out_dir, seed=7, voxel=0.45, max_faces=700_000, layout="anatomy", log=print):
     from scipy.spatial import cKDTree  # noqa: F401  (проверка зависимостей)
 
     t0 = time.time()
+    lay = LAYOUTS[layout]
     rng = np.random.default_rng(seed)
     P = socket_params()
     D = gp.derive(P)
     meshes = {s.key: load_atlas_mesh(anatomy_dir, s.fma) for s in MUSCLES}
     z_eq, r_eq, z_tip, _ = egg(D)
     zs = np.arange(z_tip - 44.0, D.z_top + 5.0, 3.0)
+    log(f"• раскладка «{layout}» — {lay.title}")
     log(f"• гильза: овал R={r_eq:.0f} мм, низ овала z={z_tip:.0f}, дно полости z={D.z_d:.0f}, край z={D.z_rim:.0f}")
     tab = deform_table(P, D, list(meshes.values()), zs)
 
-    branches = []                                  # (путь, радиусы, группа)
+    tubes = {}                                     # пути связок по мышцам (до стилизации)
     for i, spec in enumerate(MUSCLES):
+        if spec.key in BRANCHES:
+            n, r0 = BRANCHES[spec.key]
+            sp = replace(spec, tube_r=r0, twist=spec.twist * 0.5)
+            tubes[spec.key] = muscle_tubes(meshes[spec.key], sp, z_lo=20.0, z_hi=z_tip + ROOT_RANGE[1] + 30.0,
+                                           seed=seed + i, n=n, smooth_sigma=5.0)
+    fan = fan_table([p for paths, _ in tubes.values() for p in paths], z_tip, zs) if lay.fan else None
+
+    branches = []                                  # (путь, радиусы, группа)
+    for spec in MUSCLES:
         if spec.key not in BRANCHES:
             continue
-        n, r0 = BRANCHES[spec.key]
-        sp = replace(spec, tube_r=r0, twist=spec.twist * 0.5)
-        paths, radii = muscle_tubes(meshes[spec.key], sp, z_lo=20.0, z_hi=z_tip + ROOT_RANGE[1] + 30.0,
-                                    seed=seed + i, n=n, smooth_sigma=5.0)
-        if n >= 2:
+        paths, radii = tubes[spec.key]
+        if len(paths) >= 2:
             paths = stylize_cables(paths, rng, group=2, twist_range=(150.0, 300.0), shrink=1.0)
         for p, r in zip(paths, radii):
             z_end = z_tip + rng.uniform(*ROOT_RANGE)
-            q, rad = shape_branch(p, float(r), P, D, zs, tab, z_end, rng)
+            q, rad = shape_branch(p, float(r), P, D, zs, tab, z_end, rng, lay, fan)
             if q is not None:
                 branches.append((q, rad, spec.key))
     branches = tie_loose_ends(branches, z_tip)
-    branches += make_bridges(branches, D, rng)
+    branches += make_bridges(branches, D, rng, lay.bridges)
     for k, f in BONES.items():
         # кости-стойки: по реальной оси кости, вверху так же вливаются в гильзу, как мышцы
         b = load_atlas_mesh(anatomy_dir, f)
         q = bone_path(b, 14.0, z_tip + 80.0)
         z_end = z_tip + (40.0 if k == "tib" else 26.0)
-        q, rad = shape_branch(q, BONE_R[k], P, D, zs, tab, z_end, rng)
+        q, rad = shape_branch(q, BONE_R[k], P, D, zs, tab, z_end, rng, lay, fan)
         if q is not None:
             branches.append((q, rad, k))
     log(f"• ветвей: {len(branches)} ({time.time() - t0:.0f} с)")
@@ -321,7 +426,9 @@ def build(anatomy_dir, out_dir, seed=7, voxel=0.6, max_faces=400_000, log=print)
     rs = float(D.rho_out(zt)) * max(P.socket_ml_scale, P.socket_ap_scale) + 4.0
     lo = np.minimum(allp.min(0) - rmax - 6.0, [SOCKET_AXIS[0] - rs, SOCKET_AXIS[1] - rs, -2.0])
     hi = np.maximum(allp.max(0) + rmax + 6.0, [SOCKET_AXIS[0] + rs, SOCKET_AXIS[1] + rs, zt + 2.0])
-    lo[2], hi[2] = -2.0, zt + 2.0
+    lo[:2] -= 3.0 * SCULPT
+    hi[:2] += 3.0 * SCULPT
+    lo[2], hi[2] = -3.0 * SCULPT - 2.0, zt + 2.0             # запас под размытие: форма не упирается в край
     grid = gp.Grid(lo, hi, voxel)
     log(f"  сетка {grid.shape[0]}×{grid.shape[1]}×{grid.shape[2]} = {np.prod(grid.shape) / 1e6:.1f} млн вокселей")
     X, Y = np.meshgrid(grid.x, grid.y, indexing="ij")
@@ -334,11 +441,14 @@ def build(anatomy_dir, out_dir, seed=7, voxel=0.6, max_faces=400_000, log=print)
     fp = -D.c1 * np.sin(phi) - 2.0 * D.c2 * np.sin(2 * phi)
     n_trim = (1.0 / np.sqrt(1.0 + (fp / np.maximum(np.hypot(Xs, Ys), 20.0)) ** 2))[..., None]
     base = np.full(grid.shape, gp.BIG, np.float32)
+    holes = np.full(grid.shape, gp.BIG, np.float32)
     for k0 in range(0, grid.shape[2], 24):
         z = grid.z[k0:k0 + 24][None, None, :]
         res = np.full((grid.shape[0], grid.shape[1], z.shape[2]), gp.BIG)
         if z.max() >= z_tip - 10.0:
-            res = np.minimum(res, egg_socket_sdf(P, D, rho_e, f_trim, n_trim, z, Xs3, Ys3))
+            sock, hl = egg_socket_sdf(P, D, rho_e, f_trim, n_trim, z, Xs3, Ys3, holes=False)
+            res = np.minimum(res, sock)
+            holes[:, :, k0:k0 + 24] = hl
         if z.min() <= STEM[2] + 12.0:
             ank = gp.ankle_sdf(P, D, rho_c, z)
             stem = gp.sd_round_cone_2d(rho_c, z - STEM[0], STEM[1], STEM[3], STEM[2] - STEM[0])
@@ -373,14 +483,25 @@ def build(anatomy_dir, out_dir, seed=7, voxel=0.6, max_faces=400_000, log=print)
     for k0 in range(0, grid.shape[2], 64):
         base[:, :, k0:k0 + 64] = gp.smin(lat[:, :, k0:k0 + 64], base[:, :, k0:k0 + 64], np.float32(K_BODY))
     del lat
+    base = sculpt(base, grid, D.z_d - 6.0, log)
+    base = np.maximum(base, -holes)                         # отверстия в овале — уже после доводки
+    del holes
     sections = gp.section_profile(grid, base, P.ankle_height, D.z_d, 2.0)
     weakest = min(sections, key=lambda r: r["W_min_mm3"])
     log(f"  поле готово ({time.time() - t0:.0f} с); самое слабое сечение: z={weakest['z']} мм, "
         f"W={weakest['W_min_mm3']} мм³; сетка…")
 
-    body = gp.decimate(gp.field_to_mesh(grid, base), max_faces)
+    import trimesh
+    base += np.float32(1e-4)                                 # без точных нулей — без «перешейков» в сетке
+    body = gp.field_to_mesh(grid, base, process=False)
     del base
+    trimesh.smoothing.filter_taubin(body, lamb=0.5, nu=0.53, iterations=6)   # мягкое сглаживание без усадки
     man = gp.to_manifold(body)
+    tol = 0.02                                               # прореживание без потери замкнутости
+    while man.num_tri() > max_faces and tol < 0.5:
+        man = man.simplify(tol)
+        tol *= 1.6
+    log(f"  сетка: {man.num_tri():,} треугольников (допуск упрощения {tol / 1.6:.2f} мм)")
     # запечатанные пустоты (компоненты с отрицательным объёмом) заполняем
     man = gp.m3d_union([c for c in man.decompose() if c.volume() > 0]) - gp.ankle_cut(P)
     for cpt in sorted(man.decompose(), key=lambda m: -m.volume())[1:]:
@@ -390,7 +511,7 @@ def build(anatomy_dir, out_dir, seed=7, voxel=0.6, max_faces=400_000, log=print)
     out_dir.mkdir(parents=True, exist_ok=True)
     full.export(out_dir / "organic_leg_full.stl")
     ext = full.bounds[1] - full.bounds[0]
-    info = {"branches": len(branches), "size_mm": [round(float(e), 1) for e in ext],
+    info = {"layout": layout, "branches": len(branches), "size_mm": [round(float(e), 1) for e in ext],
             "volume_cm3": round(full.volume / 1000, 1), "triangles": int(len(full.faces)),
             "watertight": bool(full.is_watertight), "bodies": len(man.decompose()),
             "weakest_section": weakest, "socket_split_plane_z": round(D.z_split, 1)}
@@ -405,9 +526,10 @@ def main():
     ap.add_argument("--anatomy", required=True, help="папка со STL BodyParts3D (FMA*.stl)")
     ap.add_argument("--out", type=Path, default=HERE / "stl")
     ap.add_argument("--seed", type=int, default=7)
-    ap.add_argument("--voxel", type=float, default=0.6)
+    ap.add_argument("--voxel", type=float, default=0.45)
+    ap.add_argument("--layout", choices=sorted(LAYOUTS), default="anatomy", help="раскладка связок")
     a = ap.parse_args()
-    build(a.anatomy, a.out, a.seed, a.voxel)
+    build(a.anatomy, a.out, a.seed, a.voxel, layout=a.layout)
 
 
 if __name__ == "__main__":

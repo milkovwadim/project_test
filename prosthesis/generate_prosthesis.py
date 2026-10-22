@@ -393,13 +393,13 @@ def section_profile(grid, field_, z_from, z_to, step=2.0):
 #                      Сетка, упрощение, крепёж
 # ======================================================================
 
-def field_to_mesh(grid, field_):
+def field_to_mesh(grid, field_, process=True):
     import trimesh
     from skimage.measure import marching_cubes
 
     verts, faces, _, _ = marching_cubes(field_, level=0.0, spacing=(grid.v,) * 3, allow_degenerate=False)
     verts += grid.lo
-    mesh = trimesh.Trimesh(verts, faces, process=True)
+    mesh = trimesh.Trimesh(verts, faces, process=process)
     if mesh.volume < 0:
         mesh.invert()
     return mesh
