@@ -106,7 +106,7 @@ LAYOUTS = {
     "cables": Layout("кабели: связки каждой мышцы свиты в тугой трёхжильный кабель",
                      branches={"gm": (3, 4.4), "gl": (3, 4.2), "sol": (3, 4.2), "ach": (2, 4.0), "ta": (3, 4.0),
                                "edl": (1, 4.0), "pl": (2, 3.8)},
-                     cable=(5.5, 480.0), meander=2.5, bridges=(0.3, 0.7)),
+                     cable=(3.6, 1300.0), meander=2.5, bridges=(0.3, 0.7), sculpt=1.0, k_branch=3.0),
     "weave": Layout("плетёнка: задние и передние мышцы закручены навстречу — связки перекрещиваются",
                     spiral=140.0, counter=True, meander=2.0, bridges=(0.5,), thick=0.9),
     "strings": Layout("струны: прямые тонкие связки ровным шагом, без извилин и развилок",
@@ -119,12 +119,10 @@ LAYOUTS = {
     "snakes": Layout("змеи: сильные частые извилины", meander=10.0, wave=(45.0, 65.0), thick=0.85,
                      bridges=(0.3, 0.7)),
     "athlete": Layout("атлет: мощная икра сзади, лёгкий ажурный перед",
-                      branches={"gm": (3, 5.9), "gl": (2, 5.5), "sol": (3, 5.3), "ach": (2, 4.8), "ta": (1, 5.2),
-                                "edl": (1, 4.3), "pl": (1, 4.5)},
-                      thick_by={"gm": 1.3, "gl": 1.25, "sol": 1.25, "ach": 1.15, "ta": 0.7, "edl": 0.7,
-                                "pl": 0.75, "tib": 0.8, "fib": 0.8}),
-    "molten": Layout("литьё: связки оплавлены и слиты, как жидкий металл", thick=1.1, meander=6.0,
-                     sculpt=3.2, k_branch=12.0),
+                      thick_by={"gm": 1.18, "gl": 1.12, "sol": 1.12, "ach": 1.08, "ta": 0.62, "edl": 0.62,
+                                "pl": 0.68, "tib": 0.7, "fib": 0.7}),
+    "molten": Layout("литьё: связки оплавлены и слиты, как жидкий металл", meander=6.0,
+                     sculpt=2.7, k_branch=10.0),
 }
 
 
@@ -524,8 +522,11 @@ def build(anatomy_dir, out_dir, seed=7, voxel=0.45, max_faces=700_000, layout="a
         base[:, :, k0:k0 + 24] = res
 
     lat = np.full(grid.shape, gp.BIG, np.float32)
+    # поле связки считаем не ближе радиуса слияния с гильзой: иначе у тонких связок
+    # на краю расчётной коробки остаётся ступенька
+    reach = max(lay.k_branch, K_BODY) + 2 * voxel
     for pts, rad, _ in branches:
-        pad = float(rad.max()) + lay.k_branch + 2 * voxel
+        pad = float(rad.max()) + reach
         sl = []
         for ax, l, h in zip((grid.x, grid.y, grid.z), pts.min(0) - pad, pts.max(0) + pad):
             sl.append(slice(int(np.searchsorted(ax, l)), int(np.searchsorted(ax, h, side="right"))))
@@ -536,7 +537,7 @@ def build(anatomy_dir, out_dir, seed=7, voxel=0.45, max_faces=700_000, layout="a
             a, b = pts[j], pts[j + 1]
             if np.linalg.norm(b - a) < 1e-6:
                 continue
-            ps = max(rad[j], rad[j + 1]) + lay.k_branch + 2 * voxel
+            ps = max(rad[j], rad[j + 1]) + reach
             l_, h_ = np.minimum(a, b) - ps, np.maximum(a, b) + ps
             i0, i1 = np.searchsorted(xs, l_[0]), np.searchsorted(xs, h_[0], side="right")
             j0, j1 = np.searchsorted(ys, l_[1]), np.searchsorted(ys, h_[1], side="right")
