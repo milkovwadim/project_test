@@ -285,11 +285,12 @@ class Grid:
         self.z = self.lo[2] + np.arange(n[2]) * self.v
 
 
-def socket_sdf(P, D, rho, f_trim, n_trim, z):
+def socket_sdf(P, D, rho, f_trim, n_trim, z, bottom_round=0.0):
     qx = np.maximum(rho - P.socket_flat_radius, 0.0)
     cav = sd_round_cone_2d(qx, z - D.z_c1, D.r_b, D.r_top_rc, D.h_rc)          # полость
     d_os = D.ca * (rho - P.socket_flat_radius) + D.cb * (z - D.z_c1) - D.r_b - P.wall
-    outer = np.maximum(d_os, D.z_sb - z)                                          # наружный конус + юбка
+    outer = (round_intersect(d_os, D.z_sb - z, bottom_round) if bottom_round > 0
+             else np.maximum(d_os, D.z_sb - z))                                   # наружный конус + юбка
     hollow = round_intersect(d_os + P.skirt, (z - D.z_fu + rho) / SQRT2, 6.0)     # пустота под дном, свод 45°
     shell = np.maximum(np.maximum(outer, -cav), -hollow)
     trim = (z - D.z_rim - f_trim) * n_trim                                         # анатомический край
@@ -433,7 +434,7 @@ def from_manifold(man):
     mm = man.to_mesh()
     v = np.asarray(mm.vert_properties, dtype=np.float64)[:, :3]
     f = np.asarray(mm.tri_verts, dtype=np.int64)
-    return trimesh.Trimesh(v, f, process=True)
+    return trimesh.Trimesh(v, f, process=False)
 
 
 def hex_slot(P, length):
@@ -462,6 +463,11 @@ def ankle_cut(P):
         parts.append(Manifold.cylinder(P.adapter_recess_h + 1.0, P.adapter_recess_d / 2.0, circular_segments=96)
                      .translate((0.0, 0.0, -1.0)))
     return Manifold.batch_boolean(parts, _op_add())
+
+
+def m3d_union(parts):
+    from manifold3d import Manifold
+    return Manifold.batch_boolean(list(parts), _op_add())
 
 
 def _op_add():

@@ -1,0 +1,18 @@
+{
+  "branches": 28,
+  "size_mm": [
+    98.7,
+    106.5,
+    358.3
+  ],
+  "volume_cm3": 779.3,
+  "triangles": 379492,
+  "watertight": true,
+  "bodies": 1,
+  "weakest_section": {
+    "z": 54.0,
+    "area_mm2": 1519,
+    "W_min_mm3": 6776
+  },
+  "socket_split_plane_z": 226.0
+}
