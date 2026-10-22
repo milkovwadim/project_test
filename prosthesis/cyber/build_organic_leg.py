@@ -21,7 +21,7 @@ import json
 import math
 import sys
 import time
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
@@ -63,14 +63,29 @@ EGG_C = 64.0          # вертикальная полуось овала
 HOLE = (-45.0, 0.45, 4.5)   # маленькое круглое отверстие на овале, как на фото: угол, высота (доля), радиус
 
 
+# направление «встречной» спирали: икроножная группа в одну сторону, передняя и наружная — в другую
+SPIN = {"gm": 1, "gl": 1, "sol": 1, "ach": 1, "ta": -1, "edl": -1, "ehl": -1, "pl": -1, "pb": -1, "tib": 0, "fib": 0}
+
+
 @dataclass(frozen=True)
 class Layout:
-    """Раскладка связок: набор связок тот же, меняется только то, как они идут."""
+    """Раскладка связок: сколько их, какой толщины и как они идут."""
     title: str
+    branches: dict = field(default_factory=lambda: dict(BRANCHES))   # мышца -> (сколько связок, радиус, мм)
+    thick: float = 1.0              # общий множитель толщины
+    thick_by: dict = field(default_factory=dict)   # множители толщины по мышцам и костям
+    bones: bool = True              # кости-стойки (большеберцовая и малоберцовая)
+    twist: float = None             # закрутка связок одной мышцы вокруг её оси, градусы (None — анатомическая)
+    cable: tuple = ()               # (радиус пучка, мм; закрутка, градусы): связки мышцы собраны в свитый «кабель»
     spiral: float = 0.0             # общий винт всех связок вокруг оси голени (от гильзы к щиколотке), градусы
+    counter: bool = False           # винт встречный: задняя группа мышц в одну сторону, передняя — в другую
     fan: float = 0.0                # 0..1: насколько развести связки по кругу равномерно (1 — ровный шаг)
-    meander: float = MEANDER
-    bridges: tuple = BRIDGE_LEVELS
+    meander: float = MEANDER        # амплитуда «извилин», мм
+    wave: tuple = (70.0, 115.0)     # длина волны «извилин», мм
+    taper: float = 0.0              # >0: внизу толще, вверху тоньше (ствол -> ветки), <0 — наоборот
+    bridges: tuple = BRIDGE_LEVELS  # уровни Y-развилок между соседними связками
+    sculpt: float = SCULPT          # мягкость «литья»: размытие поля расстояний, мм
+    k_branch: float = K_BRANCH      # радиус слияния связок между собой
 
 
 LAYOUTS = {
@@ -78,6 +93,38 @@ LAYOUTS = {
     "spiral": Layout("спираль: весь пучок винтом вокруг голени", spiral=110.0),
     "fan": Layout("веер: связки разведены по кругу ровнее, окна между ними чище", fan=0.75),
     "delta": Layout("дельта: извилистее и больше развилок", meander=6.5, bridges=(0.1, 0.28, 0.46, 0.64, 0.82)),
+    "web": Layout("паутина: вдвое больше связок, вдвое тоньше",
+                  branches={"gm": (4, 3.6), "gl": (3, 3.4), "sol": (4, 3.4), "ach": (3, 3.0), "ta": (3, 3.4),
+                            "edl": (2, 3.0), "ehl": (1, 2.8), "pl": (2, 3.0), "pb": (1, 3.0)},
+                  thick_by={"tib": 0.6, "fib": 0.75}, meander=4.5, bridges=(0.1, 0.28, 0.46, 0.64, 0.82),
+                  sculpt=1.3, k_branch=5.0),
+    "ropes": Layout("канаты: по одной толстой связке на мышцу, большие окна",
+                    branches={"gm": (1, 8.0), "gl": (1, 7.0), "sol": (1, 7.5), "ach": (1, 6.5), "ta": (1, 7.5),
+                              "pl": (1, 6.0)},
+                    meander=3.0, bridges=(0.3, 0.7), sculpt=2.0, k_branch=9.0),
+    "tornado": Layout("торнадо: сильный винт, пучок закручен на 220°", spiral=220.0, meander=3.0, thick=0.9),
+    "cables": Layout("кабели: связки каждой мышцы свиты в тугой трёхжильный кабель",
+                     branches={"gm": (3, 4.4), "gl": (3, 4.2), "sol": (3, 4.2), "ach": (2, 4.0), "ta": (3, 4.0),
+                               "edl": (1, 4.0), "pl": (2, 3.8)},
+                     cable=(5.5, 480.0), meander=2.5, bridges=(0.3, 0.7)),
+    "weave": Layout("плетёнка: задние и передние мышцы закручены навстречу — связки перекрещиваются",
+                    spiral=140.0, counter=True, meander=2.0, bridges=(0.5,), thick=0.9),
+    "strings": Layout("струны: прямые тонкие связки ровным шагом, без извилин и развилок",
+                      branches={"gm": (3, 3.6), "gl": (2, 3.6), "sol": (3, 3.4), "ach": (2, 3.2), "ta": (2, 3.6),
+                                "edl": (1, 3.2), "pl": (2, 3.2), "pb": (1, 3.0)},
+                      thick_by={"tib": 0.6, "fib": 0.75}, twist=0.0, fan=0.9, meander=0.0, bridges=(),
+                      sculpt=1.2, k_branch=4.0),
+    "tree": Layout("дерево: толстый ствол у щиколотки ветвится кверху в тонкие веточки",
+                   taper=0.45, bridges=(0.08, 0.22, 0.36, 0.5, 0.64, 0.78, 0.9)),
+    "snakes": Layout("змеи: сильные частые извилины", meander=10.0, wave=(45.0, 65.0), thick=0.85,
+                     bridges=(0.3, 0.7)),
+    "athlete": Layout("атлет: мощная икра сзади, лёгкий ажурный перед",
+                      branches={"gm": (3, 5.9), "gl": (2, 5.5), "sol": (3, 5.3), "ach": (2, 4.8), "ta": (1, 5.2),
+                                "edl": (1, 4.3), "pl": (1, 4.5)},
+                      thick_by={"gm": 1.3, "gl": 1.25, "sol": 1.25, "ach": 1.15, "ta": 0.7, "edl": 0.7,
+                                "pl": 0.75, "tib": 0.8, "fib": 0.8}),
+    "molten": Layout("литьё: связки оплавлены и слиты, как жидкий металл", thick=1.1, meander=6.0,
+                     sculpt=3.2, k_branch=12.0),
 }
 
 
@@ -167,7 +214,7 @@ def ray_socket(P, D, c, u, z):
 
 
 # ----------------------------------------------------------------------
-def shape_branch(path, r0, P, D, zs, tab, z_root_end, rng=None, layout=LAYOUTS["anatomy"], fan=None):
+def shape_branch(path, r0, P, D, zs, tab, z_root_end, rng=None, layout=LAYOUTS["anatomy"], fan=None, spin=1.0):
     """Стройнее, «извилины», обжатие вокруг гильзы, «корни» в овал, схождение в горловину."""
     from scipy.ndimage import gaussian_filter1d, map_coordinates
 
@@ -190,9 +237,9 @@ def shape_branch(path, r0, P, D, zs, tab, z_root_end, rng=None, layout=LAYOUTS["
         w = layout.fan * gp.smoothstep(NECK_Z[0], NECK_Z[1], z) * (1.0 - gp.smoothstep(z_tip - 30.0, z_tip, z))
         ph = ph + w * dp
         path[:, :2] = axis + rr[:, None] * np.column_stack([np.sin(ph), np.cos(ph)])
-    if layout.spiral:
+    if layout.spiral and spin:
         # винт вокруг оси голени: у гильзы связки на своих местах, к горловине повёрнуты на spiral
-        th = np.radians(layout.spiral) * (gp.smoothstep(NECK_Z[0], z_tip, z) - 1.0)
+        th = spin * np.radians(layout.spiral) * (gp.smoothstep(NECK_Z[0], z_tip, z) - 1.0)
         d = path[:, :2] - axis
         ct, st = np.cos(th), np.sin(th)
         path[:, :2] = axis + np.column_stack([d[:, 0] * ct - d[:, 1] * st, d[:, 0] * st + d[:, 1] * ct])
@@ -217,7 +264,7 @@ def shape_branch(path, r0, P, D, zs, tab, z_root_end, rng=None, layout=LAYOUTS["
     out[:, :2] = c + u * t_f[:, None]
     # «извилины»: волна поперёк ветви, гаснет у горловины и у корня
     if rng is not None and layout.meander > 0:
-        lam, ph0 = rng.uniform(70.0, 115.0), rng.uniform(0, 2 * np.pi)
+        lam, ph0 = rng.uniform(*layout.wave), rng.uniform(0, 2 * np.pi)
         amp = layout.meander * gp.smoothstep(NECK_Z[0], NECK_Z[1], z) * (1.0 - gp.smoothstep(z_root_end - ROOT_LEN, z_root_end, z))
         off = amp * np.sin(2 * np.pi * z / lam + ph0)
         out[:, 0] += -u[:, 1] * off
@@ -231,7 +278,23 @@ def shape_branch(path, r0, P, D, zs, tab, z_root_end, rng=None, layout=LAYOUTS["
     # радиус: корень сужается и «тает» в стенке гильзы; к щиколотке ветви чуть толще
     rad = r0 * (1.0 - 0.45 * gp.smoothstep(z_root_end - ROOT_LEN, z_root_end, zz))
     rad = rad * (1.0 + 0.3 * gp.smoothstep(NECK_Z[1], NECK_Z[0], zz))
+    if layout.taper:
+        rad = rad * (1.0 + layout.taper * (1.0 - 2.0 * gp.smoothstep(NECK_Z[0], z_tip, zz)))
     return out, rad
+
+
+def cable(paths, off, turn, rng):
+    """Связки одной мышцы собираются в «кабель»: нити ровным шагом по кругу радиуса off
+    вокруг оси мышцы и свиты на turn градусов по всей длине."""
+    P = np.stack([p[:, :2] for p in paths], axis=1)          # (k, n, 2) — все пути на одних и тех же z
+    z = paths[0][:, 2]
+    n = len(paths)
+    c = P.mean(axis=1)
+    d0 = P[len(z) // 2, 0] - c[len(z) // 2]
+    a = (math.atan2(d0[1], d0[0]) + 2 * np.pi * np.arange(n)[None, :] / n
+         + np.radians(turn) * rng.choice((-1.0, 1.0)) * ((z - z[0]) / max(z[-1] - z[0], 1.0))[:, None])
+    P = c[:, None, :] + off * np.stack([np.cos(a), np.sin(a)], axis=-1)
+    return [np.column_stack([P[:, i, 0], P[:, i, 1], z]) for i in range(n)]
 
 
 def fan_table(paths, z_tip, zs, n_phi=120):
@@ -354,7 +417,7 @@ def bone_path(mesh, z_lo, z_hi, step=8.0):
     return pts
 
 
-def sculpt(field, grid, z_keep, log=print):
+def sculpt(field, grid, z_keep, sigma=SCULPT, log=print):
     """Скульптурная доводка решётки: размытие поля расстояний работает как сглаживающий
     «мастихин»: узкие щели между почти касающимися ветвями заплывают, мелкие бугорки и узелки
     сглаживаются, во внутренних углах стыков появляются ровные галтели; крупные окна остаются.
@@ -363,7 +426,7 @@ def sculpt(field, grid, z_keep, log=print):
     t0 = time.time()
     k1 = int(np.searchsorted(grid.z, z_keep + 6.0))
     sub = field[:, :, :k1]
-    blurred = gaussian_filter(sub, SCULPT / grid.v) - np.float32(SCULPT_GROW)
+    blurred = gaussian_filter(sub, sigma / grid.v) - np.float32(SCULPT_GROW * (sigma / SCULPT) ** 2)
     w = gp.smoothstep(z_keep, z_keep - 12.0, grid.z[:k1])[None, None, :].astype(np.float32)
     field[:, :, :k1] = w * blurred + (1.0 - w) * sub
     log(f"  скульптурная доводка решётки ({time.time() - t0:.0f} с)")
@@ -388,33 +451,38 @@ def build(anatomy_dir, out_dir, seed=7, voxel=0.45, max_faces=700_000, layout="a
 
     tubes = {}                                     # пути связок по мышцам (до стилизации)
     for i, spec in enumerate(MUSCLES):
-        if spec.key in BRANCHES:
-            n, r0 = BRANCHES[spec.key]
-            sp = replace(spec, tube_r=r0, twist=spec.twist * 0.5)
+        if spec.key in lay.branches:
+            n, r0 = lay.branches[spec.key]
+            tw = spec.twist * 0.5 if lay.twist is None else math.copysign(lay.twist, spec.twist or 1.0)
+            sp = replace(spec, tube_r=r0 * lay.thick * lay.thick_by.get(spec.key, 1.0), twist=tw)
             tubes[spec.key] = muscle_tubes(meshes[spec.key], sp, z_lo=20.0, z_hi=z_tip + ROOT_RANGE[1] + 30.0,
                                            seed=seed + i, n=n, smooth_sigma=5.0)
     fan = fan_table([p for paths, _ in tubes.values() for p in paths], z_tip, zs) if lay.fan else None
 
     branches = []                                  # (путь, радиусы, группа)
     for spec in MUSCLES:
-        if spec.key not in BRANCHES:
+        if spec.key not in lay.branches:
             continue
         paths, radii = tubes[spec.key]
         if len(paths) >= 2:
             paths = stylize_cables(paths, rng, group=2, twist_range=(150.0, 300.0), shrink=1.0)
+            if lay.cable:
+                paths = cable(paths, *lay.cable, rng)
+        spin = SPIN[spec.key] if lay.counter else 1.0
         for p, r in zip(paths, radii):
             z_end = z_tip + rng.uniform(*ROOT_RANGE)
-            q, rad = shape_branch(p, float(r), P, D, zs, tab, z_end, rng, lay, fan)
+            q, rad = shape_branch(p, float(r), P, D, zs, tab, z_end, rng, lay, fan, spin)
             if q is not None:
                 branches.append((q, rad, spec.key))
     branches = tie_loose_ends(branches, z_tip)
     branches += make_bridges(branches, D, rng, lay.bridges)
-    for k, f in BONES.items():
+    for k, f in BONES.items() if lay.bones else ():
         # кости-стойки: по реальной оси кости, вверху так же вливаются в гильзу, как мышцы
         b = load_atlas_mesh(anatomy_dir, f)
         q = bone_path(b, 14.0, z_tip + 80.0)
         z_end = z_tip + (40.0 if k == "tib" else 26.0)
-        q, rad = shape_branch(q, BONE_R[k], P, D, zs, tab, z_end, rng, lay, fan)
+        r_b = BONE_R[k] * lay.thick * lay.thick_by.get(k, 1.0)
+        q, rad = shape_branch(q, r_b, P, D, zs, tab, z_end, rng, lay, fan, SPIN[k] if lay.counter else 1.0)
         if q is not None:
             branches.append((q, rad, k))
     log(f"• ветвей: {len(branches)} ({time.time() - t0:.0f} с)")
@@ -426,9 +494,9 @@ def build(anatomy_dir, out_dir, seed=7, voxel=0.45, max_faces=700_000, layout="a
     rs = float(D.rho_out(zt)) * max(P.socket_ml_scale, P.socket_ap_scale) + 4.0
     lo = np.minimum(allp.min(0) - rmax - 6.0, [SOCKET_AXIS[0] - rs, SOCKET_AXIS[1] - rs, -2.0])
     hi = np.maximum(allp.max(0) + rmax + 6.0, [SOCKET_AXIS[0] + rs, SOCKET_AXIS[1] + rs, zt + 2.0])
-    lo[:2] -= 3.0 * SCULPT
-    hi[:2] += 3.0 * SCULPT
-    lo[2], hi[2] = -3.0 * SCULPT - 2.0, zt + 2.0             # запас под размытие: форма не упирается в край
+    lo[:2] -= 3.0 * lay.sculpt
+    hi[:2] += 3.0 * lay.sculpt
+    lo[2], hi[2] = -3.0 * lay.sculpt - 2.0, zt + 2.0             # запас под размытие: форма не упирается в край
     grid = gp.Grid(lo, hi, voxel)
     log(f"  сетка {grid.shape[0]}×{grid.shape[1]}×{grid.shape[2]} = {np.prod(grid.shape) / 1e6:.1f} млн вокселей")
     X, Y = np.meshgrid(grid.x, grid.y, indexing="ij")
@@ -457,7 +525,7 @@ def build(anatomy_dir, out_dir, seed=7, voxel=0.45, max_faces=700_000, layout="a
 
     lat = np.full(grid.shape, gp.BIG, np.float32)
     for pts, rad, _ in branches:
-        pad = float(rad.max()) + K_BRANCH + 2 * voxel
+        pad = float(rad.max()) + lay.k_branch + 2 * voxel
         sl = []
         for ax, l, h in zip((grid.x, grid.y, grid.z), pts.min(0) - pad, pts.max(0) + pad):
             sl.append(slice(int(np.searchsorted(ax, l)), int(np.searchsorted(ax, h, side="right"))))
@@ -468,7 +536,7 @@ def build(anatomy_dir, out_dir, seed=7, voxel=0.45, max_faces=700_000, layout="a
             a, b = pts[j], pts[j + 1]
             if np.linalg.norm(b - a) < 1e-6:
                 continue
-            ps = max(rad[j], rad[j + 1]) + K_BRANCH + 2 * voxel
+            ps = max(rad[j], rad[j + 1]) + lay.k_branch + 2 * voxel
             l_, h_ = np.minimum(a, b) - ps, np.maximum(a, b) + ps
             i0, i1 = np.searchsorted(xs, l_[0]), np.searchsorted(xs, h_[0], side="right")
             j0, j1 = np.searchsorted(ys, l_[1]), np.searchsorted(ys, h_[1], side="right")
@@ -479,11 +547,11 @@ def build(anatomy_dir, out_dir, seed=7, voxel=0.45, max_faces=700_000, layout="a
                                    a, b, float(rad[j]), float(rad[j + 1]))
             sub = local[i0:i1, j0:j1, q0:q1]
             np.minimum(sub, dd, out=sub)
-        lat[sl] = gp.smin(lat[sl], local.astype(np.float32), np.float32(K_BRANCH))
+        lat[sl] = gp.smin(lat[sl], local.astype(np.float32), np.float32(lay.k_branch))
     for k0 in range(0, grid.shape[2], 64):
         base[:, :, k0:k0 + 64] = gp.smin(lat[:, :, k0:k0 + 64], base[:, :, k0:k0 + 64], np.float32(K_BODY))
     del lat
-    base = sculpt(base, grid, D.z_d - 6.0, log)
+    base = sculpt(base, grid, D.z_d - 6.0, lay.sculpt, log)
     base = np.maximum(base, -holes)                         # отверстия в овале — уже после доводки
     del holes
     sections = gp.section_profile(grid, base, P.ankle_height, D.z_d, 2.0)
