@@ -45,8 +45,11 @@ BRANCHES = {
     "pl": (1, 4.5),    # длинная малоберцовая
 }
 BONE_R = {"tib": 6.6, "fib": 4.3}
-ROOT_RANGE = (10.0, 34.0)   # «корни» поднимаются на столько мм выше нижней точки «яйца» гильзы
+ROOT_RANGE = (28.0, 50.0)   # «корни» поднимаются на столько мм выше нижней точки «яйца» гильзы (к его широкой части)
 ROOT_LEN = 40.0       # длина участка, на котором ветвь вливается в гильзу
+HOLD_LEN = 70.0       # без «талии» под гильзой: на столько мм ниже низа овала ветви не заходят внутрь
+                      # продолжения конуса гильзы — силуэт плавно сужается от колена к щиколотке
+HOLD_IN = 0.8         # ... при этом наружный край ветви — почти на линии конуса (доля радиуса ветви внутрь)
 BRIDGE_LEVELS = (0.18, 0.5, 0.8)   # уровни плавных развилок между соседними ветвями
 SCULPT = 1.7          # «скульптурная» доводка решётки: размытие поля расстояний, мм (щели заплывают,
                       # бугорки сглаживаются, в стыках — галтели); гильзу не трогает
@@ -270,9 +273,10 @@ def egg_socket_sdf(P, D, rho, f_trim, n_trim, z, Xs, Ys, holes=True, hollow_egg=
     return (out, np.minimum(hole, drain), cav) if not holes else out
 
 
-def ray_socket(P, D, c, u, z):
-    """Расстояние от c вдоль u до наружной поверхности гильзы (с овалом снизу)."""
-    r = np.maximum(egg_radius(D, z), 12.0)
+def ray_socket(P, D, c, u, z, cone=False):
+    """Расстояние от c вдоль u до наружной поверхности гильзы (с овалом снизу);
+    cone=True — до конуса гильзы, продолженного вниз вместо овала."""
+    r = np.maximum(D.rho_out(z) if cone else egg_radius(D, z), 12.0)
     dx, dy = (c[..., 0] - SOCKET_AXIS[0]) / P.socket_ml_scale, (c[..., 1] - SOCKET_AXIS[1]) / P.socket_ap_scale
     ux, uy = u[..., 0] / P.socket_ml_scale, u[..., 1] / P.socket_ap_scale
     a = ux * ux + uy * uy
@@ -351,6 +355,13 @@ def shape_branch(path, r0, P, D, zs, tab, z_root_end, rng=None, layout=LAYOUTS["
     t_layer = s_sock + r_l * lift + np.clip((t - ri) / (ro - ri), 0.0, 1.0) * thick * (1.0 - root)
     w = gp.smoothstep(z_tip - 20.0, z_tip + 25.0, z)
     t_f = t + w * (t_layer - t)
+    if HOLD_LEN > 0:
+        # без «талии»: пока ветвь не начала врастать в гильзу, она не заходит внутрь конуса гильзы,
+        # продолженного вниз (овал сужается к низу, а ветви идут дальше по линии конуса)
+        s_cone = ray_socket(P, D, c, u, z, cone=True)
+        t_hold = s_cone - HOLD_IN * r_l
+        h = (1.0 - root) * gp.smoothstep(z_tip - HOLD_LEN, z_tip, z)
+        t_f = t_f + h * np.maximum(t_hold - t_f, 0.0)
     out = path.copy()
     out[:, :2] = c + u * t_f[:, None]
     # «извилины»: волна поперёк ветви, гаснет у горловины и у корня
