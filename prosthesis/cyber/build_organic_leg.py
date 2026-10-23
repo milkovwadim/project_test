@@ -57,6 +57,10 @@ MEANDER = 5.0         # амплитуда «извилин» ветвей, мм
 K_BRANCH = 7.0        # радиус слияния ветвей между собой
 K_BODY = 15.0         # радиус слияния с гильзой и щиколоткой
 STEM = (30.0, 21.0, 92.0, 13.0)   # гладкий «стебель» над щиколоткой: (z низа, r низа, z верха, r верха)
+# протез начинается чуть ниже колена: высота гильзы берётся от реального колена атласа
+KNEE_FROM_TIB_TOP = 6.0   # линия коленного сустава ниже верхушки большеберцовой кости (межмыщелковое возвышение), мм
+RIM_BELOW_KNEE = 12.0     # передний край гильзы ниже линии колена, мм (боковые на 10 мм выше, задний на 24 ниже)
+SOCKET_DEPTH = 56.0       # глубина полости под культю (по переднему краю), мм — короткая чашка под коленом
 # низ гильзы — овал («яйцо»), как на референсе
 EGG_UP = 18.0         # овал переходит в конус гильзы (по касательной) на столько выше дна полости
 EGG_C = 64.0          # вертикальная полуось овала
@@ -108,7 +112,8 @@ class Layout:
 
 
 LAYOUTS = {
-    "anatomy": Layout("анатомия: связки по ходу мышц"),
+    "anatomy": Layout("анатомия: связки по ходу мышц, рельефом поднимаются по гильзе"),
+    "s2": Layout("s2: связки по ходу мышц, гильза гладкая", climb=0.0, carve=0.0),
     "spiral": Layout("спираль: весь пучок винтом вокруг голени", spiral=110.0),
     "fan": Layout("веер: связки разведены по кругу ровнее, окна между ними чище", fan=0.75),
     "delta": Layout("дельта: извилистее и больше развилок", meander=6.5, bridges=(0.1, 0.28, 0.46, 0.64, 0.82)),
@@ -535,19 +540,24 @@ def sculpt(field, grid, z_keep, sigma=SCULPT, log=print):
 
 
 # ----------------------------------------------------------------------
-def build(anatomy_dir, out_dir, seed=7, voxel=0.45, max_faces=700_000, layout="anatomy", log=print):
+def build(anatomy_dir, out_dir, seed=7, voxel=0.45, max_faces=700_000, layout="s2", log=print):
     from scipy.spatial import cKDTree  # noqa: F401  (проверка зависимостей)
 
     t0 = time.time()
     lay = LAYOUTS[layout]
     rng = np.random.default_rng(seed)
     lrng = np.random.default_rng(seed + 1000)      # разброс высоты рельефа — своя случайность
+    # гильза — сразу под коленом: передний край на RIM_BELOW_KNEE ниже линии сустава
+    knee = float(load_atlas_mesh(anatomy_dir, BONES["tib"]).bounds[1, 2]) - KNEE_FROM_TIB_TOP
     P = socket_params()
+    P = replace(P, socket_depth=SOCKET_DEPTH, pylon_length=knee - RIM_BELOW_KNEE - SOCKET_DEPTH)
     D = gp.derive(P)
     meshes = {s.key: load_atlas_mesh(anatomy_dir, s.fma) for s in MUSCLES}
     z_eq, r_eq, z_tip, _ = egg(D)
     zs = np.arange(z_tip - 44.0, D.z_top + 5.0, 3.0)
     log(f"• раскладка «{layout}» — {lay.title}")
+    log(f"• колено z={knee:.0f}: край гильзы спереди z={D.z_rim:.0f}, по бокам {D.z_rim + D.c0 - D.c2:.0f}, "
+        f"сзади {D.z_rim + D.c0 - D.c1 + D.c2:.0f}")
     log(f"• гильза: овал R={r_eq:.0f} мм, низ овала z={z_tip:.0f}, дно полости z={D.z_d:.0f}, край z={D.z_rim:.0f}")
     tab = deform_table(P, D, list(meshes.values()), zs)
 
@@ -722,7 +732,7 @@ def main():
     ap.add_argument("--out", type=Path, default=HERE / "stl")
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--voxel", type=float, default=0.45)
-    ap.add_argument("--layout", choices=sorted(LAYOUTS), default="anatomy", help="раскладка связок")
+    ap.add_argument("--layout", choices=sorted(LAYOUTS), default="s2", help="раскладка связок")
     a = ap.parse_args()
     build(a.anatomy, a.out, a.seed, a.voxel, layout=a.layout)
 
